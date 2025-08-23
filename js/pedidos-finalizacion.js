@@ -69,10 +69,20 @@ async function finalizarPedido() {
         const result = await response.json();
         
         if (result.success) {
+            // Marcar pedido como finalizado para desactivar prevención de recarga
+            if (typeof window.marcarPedidoFinalizado === 'function') {
+                window.marcarPedidoFinalizado();
+            }
+            
             alert(`¡Pedido finalizado exitosamente!\n\nCódigo: ${result.codigoSIN}\nTotal: $${result.total.toFixed(2)}\nProductos: ${productos.length}\nHora finalizada: ${result.horaFinalizada}`);
             
             // Limpiar sesión del pedido actual para permitir nuevos pedidos
             await limpiarSesionPedido();
+            
+            // Marcar pedido como finalizado para desactivar sistema de redirección
+            if (typeof window.marcarPedidoFinalizado === 'function') {
+                window.marcarPedidoFinalizado();
+            }
             
             // Redirigir de vuelta
             window.history.back();
@@ -93,12 +103,19 @@ async function finalizarPedido() {
 
 function cerrarPedido() {
     console.log('cerrarPedido() llamada');
-    alert('Función cerrarPedido ejecutada');
     if (productos.length > 0) {
         if (confirm('¿Está seguro de cerrar? Se perderán los datos del pedido.')) {
+            // Desactivar sistema de redirección antes de navegar
+            if (typeof window.desactivarRedireccionDashboard === 'function') {
+                window.desactivarRedireccionDashboard();
+            }
             window.history.back();
         }
     } else {
+        // Desactivar sistema de redirección antes de navegar
+        if (typeof window.desactivarRedireccionDashboard === 'function') {
+            window.desactivarRedireccionDashboard();
+        }
         window.history.back();
     }
 }
@@ -254,15 +271,30 @@ async function registrarPedidoInicial() {
             
             // Marcar en la sesión que el registro inicial fue completado
             // Esto evitará duplicados en recargas F5
-            await fetch('php/api/pedidos.php', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    action: 'marcar_registro_completado'
-                })
-            });
+            try {
+                console.log('🔄 Marcando registro como completado...');
+                const markResponse = await fetch('php/api/pedidos.php', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        action: 'marcar_registro_completado'
+                    })
+                });
+                
+                console.log('📊 Response status para marcar completado:', markResponse.status);
+                
+                if (markResponse.ok) {
+                    const markResult = await markResponse.json();
+                    console.log('✅ Registro marcado como completado:', markResult);
+                } else {
+                    console.warn('⚠️ Error al marcar como completado, pero continuando...');
+                }
+            } catch (markError) {
+                console.warn('⚠️ Error al marcar registro como completado:', markError);
+                console.warn('⚠️ Continuando sin marcar como completado...');
+            }
             
         } else {
             console.error('❌ Error al registrar pedido inicial:', result.message);

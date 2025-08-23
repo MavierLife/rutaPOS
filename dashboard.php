@@ -21,6 +21,8 @@ $dayOfWeek = strtoupper(strftime('%A'));
     <link rel="stylesheet" href="css/dashboard.css">
     <!-- Font Awesome for icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <!-- SweetAlert2 -->
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 </head>
 <body>
     <header class="header dashboard-header">
@@ -61,5 +63,64 @@ $dayOfWeek = strtoupper(strftime('%A'));
             </div>
         </div>
     </main>
+
+    <script>
+        // Detectar si viene de un pedido flotante
+        document.addEventListener('DOMContentLoaded', function() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const pedidoFlotante = urlParams.get('pedido_flotante');
+            
+            if (pedidoFlotante === '1') {
+                // Mostrar SweetAlert2 elegante
+                Swal.fire({
+                    icon: 'success',
+                    title: '¡Pedido Flotante!',
+                    text: 'El pedido se registró como flotante con éxito',
+                    confirmButtonText: 'Entendido',
+                    confirmButtonColor: '#28a745',
+                    background: '#fff',
+                    customClass: {
+                        popup: 'swal-popup-responsive',
+                        title: 'swal-title-custom',
+                        content: 'swal-content-custom'
+                    },
+                    showClass: {
+                        popup: 'animate__animated animate__fadeInDown'
+                    },
+                    hideClass: {
+                        popup: 'animate__animated animate__fadeOutUp'
+                    }
+                }).then(() => {
+                    // Limpiar la URL después de mostrar el alert
+                    const newUrl = window.location.protocol + "//" + window.location.host + window.location.pathname;
+                    window.history.replaceState({path: newUrl}, '', newUrl);
+                });
+            }
+        });
+    </script>
+
+    <style>
+        /* Estilos personalizados para SweetAlert2 */
+        .swal-popup-responsive {
+            font-size: 1rem !important;
+        }
+        
+        .swal-title-custom {
+            color: #28a745 !important;
+            font-weight: bold !important;
+        }
+        
+        .swal-content-custom {
+            color: #333 !important;
+            font-size: 1.1rem !important;
+        }
+        
+        @media (max-width: 768px) {
+            .swal2-popup {
+                width: 90% !important;
+                font-size: 0.9rem !important;
+            }
+        }
+    </style>
 </body>
 </html>

@@ -77,12 +77,13 @@ if (isset($_GET['editar']) && !empty($_GET['editar'])) {
     }
     
     // Control de sesión para evitar duplicación de pedidos
-    // Solo generar nuevo ID si es una nueva sesión de pedido o si se especifica 'nuevo=1'
+    // Detectar si es un nuevo pedido
     $esNuevoPedido = isset($_GET['nuevo']) && $_GET['nuevo'] == '1';
     $clienteCambio = isset($_SESSION['pedido_cliente_actual']) && $_SESSION['pedido_cliente_actual'] != $clienteCodigo;
     
     // Debug logging
     error_log("=== DEBUG PEDIDOS ===");
+
     error_log("esNuevoPedido: " . ($esNuevoPedido ? 'true' : 'false'));
     error_log("clienteCambio: " . ($clienteCambio ? 'true' : 'false'));
     error_log("pedido_id_actual en sesión: " . (isset($_SESSION['pedido_id_actual']) ? $_SESSION['pedido_id_actual'] : 'NO EXISTE'));
@@ -91,9 +92,12 @@ if (isset($_GET['editar']) && !empty($_GET['editar'])) {
     
     // NUEVA LÓGICA: Solo generar nuevo ID si 'nuevo=1' está explícitamente presente
     // o si el cliente cambió. Si no hay sesión y no es nuevo=1, redirigir.
-    if (!$esNuevoPedido && !isset($_SESSION['pedido_id_actual'])) {
-        // No es un pedido nuevo y no hay sesión previa - redirigir
-        error_log("❌ ACCESO INVÁLIDO: No es nuevo pedido y no hay sesión previa");
+    // EXCEPCIÓN: No redirigir si se está accediendo con parámetros de cliente válidos desde 'Rutas'
+    $tieneParametrosCliente = !empty($clienteCodigo) && !empty($clienteNombre);
+    
+    if (!$esNuevoPedido && !isset($_SESSION['pedido_id_actual']) && !$tieneParametrosCliente) {
+        // No es un pedido nuevo, no hay sesión previa y no tiene parámetros de cliente - redirigir
+        error_log("❌ ACCESO INVÁLIDO: No es nuevo pedido, no hay sesión previa y no hay parámetros de cliente");
         header('Location: clientes.php');
         exit();
     }
@@ -122,8 +126,8 @@ if (isset($_GET['editar']) && !empty($_GET['editar'])) {
     error_log("=== FIN DEBUG PEDIDOS ===");
     
     // Variable para pasar al JavaScript - distinguir entre sesión nueva y recarga
-    // Solo considerar que "ya existe sesión" si el registro inicial ya fue completado
-    $yaExisteSesion = isset($_SESSION['pedido_registrado_inicialmente']) && $_SESSION['pedido_registrado_inicialmente'] === true;
+    // Considerar que "ya existe sesión" si hay un pedido_id_actual Y no es un nuevo pedido
+    $yaExisteSesion = isset($_SESSION['pedido_id_actual']) && !$esNuevoPedido;
     
     // Si es un nuevo pedido, limpiar el flag de registro inicial para permitir el registro
     if ($esNuevoPedido) {
@@ -363,6 +367,8 @@ if (isset($_GET['editar']) && !empty($_GET['editar'])) {
             </div>
         </div>
     </div>
+
+
     
     <script>
         // Inicializar datos del cliente desde PHP
@@ -422,11 +428,67 @@ if (isset($_GET['editar']) && !empty($_GET['editar'])) {
             } else if (yaExisteSesion) {
                 console.log('✅ Registro inicial ya completado: evita duplicados en F5');
                 window.pedidoRegistrado = true; // Marcar como registrado porque ya existe
+                // AGREGAR: Cargar productos existentes si hay un pedido en sesión
+                if (pedidoId) {
+                    console.log('✅ Cargando productos existentes de sesión:', pedidoId);
+                    cargarProductosExistentes(pedidoId);
+                }
             } else {
                 console.log('✅ Recarga de página: no se registra pedido inicial');
                 window.pedidoRegistrado = true; // Marcar como registrado para evitar errores
             }
-        });
+            
+            // === REDIRECCIÓN AUTOMÁTICA AL DASHBOARD DESDE RUTAS ===
+            // Solo aplicar si se accede desde 'Rutas' (nuevo=1)
+            if (esNuevoPedido) {
+                console.log('🔄 Activando redirección automática al dashboard para pedido desde Rutas');
+                
+                // Variables globales para controlar la redirección
+                window.redirigirAlDashboard = true;
+                window.pedidoFinalizado = false;
+                
+                // Event listener para detectar recarga y redirigir inmediatamente
+                window.addEventListener('beforeunload', function(e) {
+                    // Solo redirigir si:
+                    // 1. La redirección está activa
+                    // 2. Hay productos en el pedido
+                    // 3. El pedido no ha sido finalizado
+                    if (window.redirigirAlDashboard && productos.length > 0 && !window.pedidoFinalizado) {
+                        // Redirección inmediata sin mostrar modal ni advertencias
+                        setTimeout(() => {
+                            window.location.href = 'dashboard.php?pedido_flotante=1';
+                        }, 0);
+                    }
+                });
+                
+                // Detectar teclas de recarga para desktop
+                document.addEventListener('keydown', function(e) {
+                    if (window.redirigirAlDashboard && productos.length > 0 && !window.pedidoFinalizado) {
+                        // F5 o Ctrl+R o Ctrl+F5
+                        if (e.key === 'F5' || (e.ctrlKey && e.key === 'r') || (e.ctrlKey && e.key === 'F5')) {
+                            e.preventDefault();
+                            window.location.href = 'dashboard.php?pedido_flotante=1';
+                        }
+                    }
+                });
+                
+                // Función global para desactivar la redirección
+                window.desactivarRedireccionDashboard = function() {
+                    console.log('🔓 Desactivando redirección al dashboard');
+                    window.redirigirAlDashboard = false;
+                };
+                
+                // Función global para marcar pedido como finalizado
+                window.marcarPedidoFinalizado = function() {
+                    console.log('✅ Pedido marcado como finalizado - desactivando redirección');
+                    window.pedidoFinalizado = true;
+                    window.redirigirAlDashboard = false;
+                };
+            }
+
+         });
+         
+
     </script>
 </body>
 </html>
