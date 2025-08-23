@@ -205,67 +205,7 @@ window.addEventListener('click', function(event) {
     }
 });
 
-// Función para cargar productos existentes de un pedido
-async function cargarProductosExistentes(codigoSIN) {
-    try {
-        console.log('=== CARGANDO PRODUCTOS EXISTENTES ===');
-        console.log('CodigoSIN:', codigoSIN);
-        
-        const response = await fetch('php/api/pedidos.php', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                action: 'obtener_productos_pedido',
-                codigoSIN: codigoSIN
-            })
-        });
-        
-        const result = await response.json();
-        console.log('Respuesta de productos existentes:', result);
-        
-        if (result.success && result.productos) {
-            // Limpiar array de productos actual
-            productos = [];
-            
-            // Cargar productos existentes
-            result.productos.forEach(producto => {
-                productos.push({
-                    id: producto.idDetalle, // Usar IDDetalle como identificador único
-                    idDetalle: producto.idDetalle, // Mantener referencia al IDDetalle
-                    codigoProd: producto.codigoProd,
-                    descripcion: producto.descripcion,
-                    contenido1: producto.contenido1,
-                    contenido2: producto.contenido2,
-                    cantidad: producto.cantidad,
-                    precio: producto.precio,
-                    importe: producto.importe,
-                    bonificacion: producto.bonificacion,
-                    descuento: producto.descuento,
-                    oferta: producto.oferta,
-                    autorizacion: producto.autorizacion,
-                    unidades: producto.unidades,
-                    tipoproducto: producto.tipoproducto,
-                    tv: producto.tv // Preservar campo TV de la base de datos
-                });
-            });
-            
-            // Actualizar la interfaz
-            actualizarListaProductos();
-            actualizarTotal();
-            
-            console.log('✅ Productos cargados exitosamente:', productos.length);
-        } else {
-            console.log('ℹ️ No hay productos existentes o error:', result.message);
-        }
-        
-    } catch (error) {
-        console.error('❌ Error al cargar productos existentes:', error);
-    }
-    
-    console.log('=== FIN CARGA PRODUCTOS EXISTENTES ===');
-}
+// Función para cargar productos existentes de un pedido - movida a pedidos.js
 
 // Registrar pedido inicial al cargar la página
 async function registrarPedidoInicial() {

@@ -19,6 +19,11 @@ let swipeStartTime = 0;
 let productoAEliminar = null;
 let swipeActive = false;
 
+// Función helper para obtener unidades por fardo
+function obtenerUnidadesPorFardo(producto) {
+    return producto ? (producto.unidades || 1) : 1;
+}
+
 // Configurar tipo de pago
 document.querySelectorAll('.btn-tipo-pago').forEach(btn => {
     btn.addEventListener('click', function() {
@@ -105,22 +110,44 @@ function mostrarProductos(productos) {
     }
     
     const html = productos.map(producto => {
-        const stockColor = producto.existencia > 0 ? 'green' : 'red';
-        const stockDisplay = producto.stockDisplay || 'Sin stock';
+        const stockActual = producto.existencia || 0;
+        const unidadesPorFardo = producto.unidades || 1;
+        
+        // Determinar color y estado del stock
+        let stockColor, stockTexto, stockIcon;
+        if (stockActual <= 0) {
+            stockColor = 'red';
+            stockTexto = 'Sin stock';
+            stockIcon = 'fas fa-times-circle';
+        } else if (stockActual <= 10) {
+            stockColor = 'orange';
+            stockTexto = `Stock bajo: ${producto.stockDisplay || stockActual + 'U'}`;
+            stockIcon = 'fas fa-exclamation-triangle';
+        } else {
+            stockColor = 'green';
+            stockTexto = `Stock: ${producto.stockDisplay || stockActual + 'U'}`;
+            stockIcon = 'fas fa-check-circle';
+        }
         
         // Formato de precios: D: $1.95 M: $38.00 - $1.90
         const preciosDisplay = `D: $${producto.precioDetalleUnitario} M: $${producto.precioMayoreoFardo} - $${producto.precioMayoreoUnitario}`;
         
+        // Deshabilitar botón si no hay stock
+        const botonDeshabilitado = stockActual <= 0 ? 'disabled' : '';
+        const claseBoton = stockActual <= 0 ? 'btn-add-producto-modal disabled' : 'btn-add-producto-modal';
+        
         return `
             <div class="producto-item-modal">
-                <button class="btn-add-producto-modal" onclick="seleccionarProducto('${producto.CodigoProd}')">
+                <button class="${claseBoton}" onclick="seleccionarProducto('${producto.CodigoProd}')" ${botonDeshabilitado}>
                     <i class="fas fa-plus"></i>
                 </button>
                 <div class="producto-info">
                     <div class="producto-nombre">${producto.descripcion}${producto.contenido1 ? ` - ${producto.contenido1}` : ''}</div>
                     <div class="producto-detalles">
-                        <span class="producto-unidades">${producto.unidades}</span>
-                        <span class="producto-stock" style="color: ${stockColor}">Stock: ${stockDisplay}</span>
+                        <span class="producto-unidades">${producto.unidades}U/F</span>
+                        <span class="producto-stock" style="color: ${stockColor}">
+                            <i class="${stockIcon}"></i> ${stockTexto}
+                        </span>
                         <span class="producto-precios">${preciosDisplay}</span>
                     </div>
                 </div>
@@ -326,7 +353,6 @@ function toggleModoVenta() {
 function calcularPrecioUnitario(tipo, cantidadUnidades) {
     if (!productoSeleccionado) return 0;
     
-    const unidadesPorFardo = productoSeleccionado.unidades || 1;
     const uMinimaMAyoreo = productoSeleccionado.uminimamayoreo || 1;
     
     let precioBase = 0;
@@ -346,7 +372,7 @@ function calcularPrecioUnitario(tipo, cantidadUnidades) {
             default:
                 precioBase = productoSeleccionado.precioespecial || 0;
         }
-        return precioBase / unidadesPorFardo;
+        return precioBase / obtenerUnidadesPorFardo(productoSeleccionado);
     } else {
         // Modo unidades: aplicar lógica de umbral
         if (cantidadUnidades >= uMinimaMAyoreo) {
@@ -364,11 +390,11 @@ function calcularPrecioUnitario(tipo, cantidadUnidades) {
                 default:
                     precioBase = productoSeleccionado.precioespecial || 0;
             }
-            return precioBase / unidadesPorFardo;
+            return precioBase / obtenerUnidadesPorFardo(productoSeleccionado);
         } else {
             // Usar precio detalle unitario
             const precioDetalle = productoSeleccionado.preciodetalle || 0;
-            return precioDetalle / unidadesPorFardo;
+            return precioDetalle / obtenerUnidadesPorFardo(productoSeleccionado);
         }
     }
 }
@@ -413,8 +439,7 @@ function calcularTotal() {
     // Calcular CantidadEnUnidadesEfectivas según el modo
     let cantidadEnUnidadesEfectivas;
     if (modoVenta === 'fardos') {
-        const unidadesPorFardo = productoSeleccionado ? (productoSeleccionado.unidades || 1) : 1;
-        cantidadEnUnidadesEfectivas = cantidad * unidadesPorFardo;
+        cantidadEnUnidadesEfectivas = cantidad * obtenerUnidadesPorFardo(productoSeleccionado);
     } else {
         cantidadEnUnidadesEfectivas = cantidad;
     }
@@ -471,8 +496,7 @@ function esProductoFardo(producto) {
     }
     
     // Lógica de respaldo para casos donde TV no esté disponible
-    const unidadesPorFardo = producto.unidades || 1;
-    return (producto.cantidad % unidadesPorFardo === 0) && (producto.cantidad >= unidadesPorFardo);
+    return (producto.cantidad % obtenerUnidadesPorFardo(producto) === 0) && (producto.cantidad >= obtenerUnidadesPorFardo(producto));
 }
 
 // Función para validar duplicados de productos
@@ -521,12 +545,39 @@ async function agregarProductoAlPedido() {
         return;
     }
     
+    // NUEVA VALIDACIÓN DE EXISTENCIAS
+    const stockDisponible = productoSeleccionado.existencia || 0;
+    
+    // Calcular cantidad solicitada en unidades individuales
+    let cantidadSolicitadaEnUnidades;
+    if (modoVenta === 'fardos') {
+        cantidadSolicitadaEnUnidades = cantidad * obtenerUnidadesPorFardo(productoSeleccionado);
+    } else {
+        cantidadSolicitadaEnUnidades = cantidad;
+    }
+    
+    // Verificar si hay suficiente stock
+    if (cantidadSolicitadaEnUnidades > stockDisponible) {
+        const unidadTexto = modoVenta === 'fardos' ? 'fardos' : 'unidades';
+        const stockEnModoActual = modoVenta === 'fardos' ? Math.floor(stockDisponible / obtenerUnidadesPorFardo(productoSeleccionado)) : stockDisponible;
+        
+        mostrarMensajeInventario(
+            'error',
+            'Stock Insuficiente',
+            `No hay suficiente inventario para completar esta operación.\n\n` +
+            `Producto: ${productoSeleccionado.descripcion}\n` +
+            `Disponible: ${stockEnModoActual} ${unidadTexto}\n` +
+            `Solicitado: ${cantidad} ${unidadTexto}\n\n` +
+            `Ajuste la cantidad o seleccione otro producto.`
+        );
+        return;
+    }
+    
     // Convertir cantidad según el modo de venta
     let cantidadEnUnidadesEfectivas;
-    const unidadesPorFardo = productoSeleccionado.unidades || 1;
     
     if (modoVenta === 'fardos') {
-        cantidadEnUnidadesEfectivas = cantidad * unidadesPorFardo;
+        cantidadEnUnidadesEfectivas = cantidad * obtenerUnidadesPorFardo(productoSeleccionado);
     } else {
         cantidadEnUnidadesEfectivas = cantidad;
     }
@@ -559,6 +610,7 @@ async function agregarProductoAlPedido() {
     
     // Llamar API para insertar producto inmediatamente en la base de datos
     // IMPORTANTE: Usar cantidadEnUnidadesEfectivas para la base de datos
+    // El inventario se actualiza automáticamente en el backend como operación atómica
     await insertarProductoInmediato({
         codigoSIN: pedidoId,
         codigoProd: productoSeleccionado.CodigoProd,
@@ -571,6 +623,25 @@ async function agregarProductoAlPedido() {
         observaciones: ''
     });
     
+    // Actualizar inventario local para reflejar el cambio
+    const stockAnterior = productoSeleccionado.existencia || 0;
+    const nuevoStock = stockAnterior - cantidadEnUnidadesEfectivas;
+    
+    // Actualizar el stock en el producto seleccionado
+    productoSeleccionado.existencia = nuevoStock;
+    
+    // Actualizar el stock en la lista de productos disponibles
+    const productoEnLista = productosDisponibles.find(p => p.CodigoProd === productoSeleccionado.CodigoProd);
+    if (productoEnLista) {
+        productoEnLista.existencia = nuevoStock;
+    }
+    
+    // Actualizar la visualización si el modal está abierto
+    const modal = document.getElementById('productosModal');
+    if (modal && modal.style.display === 'flex') {
+        mostrarProductos(productosDisponibles);
+    }
+    
     actualizarListaProductos();
     actualizarTotal();
     cerrarModalAgregar();
@@ -578,6 +649,205 @@ async function agregarProductoAlPedido() {
 
 function cancelarAgregarProducto() {
     cerrarModalAgregar();
+}
+
+// Función para mostrar mensajes informativos del sistema de inventario
+function mostrarMensajeInventario(tipo, titulo, mensaje) {
+    console.log('=== MOSTRANDO MODAL DE INVENTARIO ===');
+    console.log('Tipo:', tipo, 'Título:', titulo);
+    
+    // ELIMINAR modal existente si existe (solución radical)
+    const modalExistente = document.getElementById('inventoryMessageModal');
+    if (modalExistente) {
+        console.log('Eliminando modal existente...');
+        modalExistente.remove();
+    }
+    
+    // CREAR modal completamente nuevo cada vez
+    const modal = document.createElement('div');
+    modal.id = 'inventoryMessageModal';
+    modal.className = 'modal-overlay';
+    modal.innerHTML = `
+        <div class="modal-content inventory-message-modal">
+            <div class="modal-header">
+                <h3 id="inventoryMessageTitle">Mensaje</h3>
+                <button class="modal-close" id="inventoryModalCloseBtn">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div id="inventoryMessageIcon" class="message-icon"></div>
+                <div id="inventoryMessageText" class="message-text"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-primary" id="inventoryModalOkBtn">Entendido</button>
+            </div>
+        </div>
+    `;
+    
+    // Agregar al DOM
+    document.body.appendChild(modal);
+    console.log('Modal nuevo creado y agregado al DOM');
+    
+    // Event listeners SIMPLES Y DIRECTOS
+    const closeBtn = document.getElementById('inventoryModalCloseBtn');
+    const okBtn = document.getElementById('inventoryModalOkBtn');
+    
+    console.log('Botones encontrados:', { closeBtn: !!closeBtn, okBtn: !!okBtn });
+    
+    // Event listener para botón X
+    if (closeBtn) {
+        closeBtn.onclick = function() {
+            console.log('Clic en botón X detectado');
+            cerrarMensajeInventario();
+        };
+        console.log('✅ Event listener X configurado');
+    }
+    
+    // Event listener para botón Entendido
+    if (okBtn) {
+        okBtn.onclick = function() {
+            console.log('Clic en botón Entendido detectado');
+            cerrarMensajeInventario();
+        };
+        console.log('✅ Event listener Entendido configurado');
+    }
+    
+    // Configurar el contenido según el tipo
+    const titleElement = document.getElementById('inventoryMessageTitle');
+    const iconElement = document.getElementById('inventoryMessageIcon');
+    const textElement = document.getElementById('inventoryMessageText');
+    
+    titleElement.textContent = titulo;
+    textElement.textContent = mensaje;
+    
+    // Configurar icono y estilo según el tipo
+    iconElement.className = 'message-icon';
+    switch (tipo) {
+        case 'error':
+            iconElement.innerHTML = '<i class="fas fa-exclamation-triangle" style="color: #c62828; font-size: 32px;"></i>';
+            titleElement.style.color = '#c62828';
+            break;
+        case 'warning':
+            iconElement.innerHTML = '<i class="fas fa-exclamation-circle" style="color: #ef6c00; font-size: 32px;"></i>';
+            titleElement.style.color = '#ef6c00';
+            break;
+        case 'success':
+            iconElement.innerHTML = '<i class="fas fa-check-circle" style="color: #2e7d32; font-size: 32px;"></i>';
+            titleElement.style.color = '#2e7d32';
+            break;
+        case 'info':
+        default:
+            iconElement.innerHTML = '<i class="fas fa-info-circle" style="color: #1976d2; font-size: 32px;"></i>';
+            titleElement.style.color = '#1976d2';
+            break;
+    }
+    
+    // Event listener para cerrar con clic fuera del modal
+    modal.onclick = function(e) {
+        if (e.target === modal) {
+            console.log('Clic fuera del modal detectado');
+            cerrarMensajeInventario();
+        }
+    };
+    console.log('✅ Event listener clic fuera configurado');
+    
+    // Event listener para cerrar con ESC
+    window.inventoryEscHandler = function(e) {
+        if (e.key === 'Escape') {
+            console.log('Tecla ESC detectada');
+            cerrarMensajeInventario();
+        }
+    };
+    document.addEventListener('keydown', window.inventoryEscHandler);
+    console.log('✅ Event listener ESC configurado');
+    
+    // Mostrar el modal
+    modal.style.display = 'flex';
+    console.log('✅ Modal mostrado');
+    console.log('=== MODAL DE INVENTARIO LISTO ===');
+}
+
+function cerrarMensajeInventario() {
+    console.log('=== CERRANDO MODAL DE INVENTARIO (SOLUCIÓN RADICAL) ===');
+    const modal = document.getElementById('inventoryMessageModal');
+    
+    if (modal) {
+        console.log('Modal encontrado, ELIMINANDO completamente del DOM...');
+        
+        // ELIMINAR completamente del DOM (no solo ocultar)
+        modal.remove();
+        console.log('✅ Modal ELIMINADO completamente del DOM');
+        
+        // Limpiar event listeners de ESC si existen
+        if (window.inventoryEscHandler) {
+            document.removeEventListener('keydown', window.inventoryEscHandler);
+            window.inventoryEscHandler = null;
+            console.log('✅ Event listener ESC limpiado');
+        }
+        
+        console.log('✅ Modal cerrado y eliminado exitosamente');
+    } else {
+        console.log('❌ Modal no encontrado en el DOM');
+    }
+    console.log('=== FIN CIERRE MODAL ===');
+}
+
+// Función para actualizar inventario
+async function actualizarInventarioProducto(datos) {
+    try {
+        console.log('Actualizando inventario:', datos);
+        
+        const response = await fetch('php/api/pedidos.php', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                action: 'actualizar_inventario',
+                codigoProd: datos.codigoProd,
+                cantidad: datos.cantidad,
+                operacion: datos.operacion
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (!result.success) {
+            console.error('Error al actualizar inventario:', result.message);
+            mostrarMensajeInventario(
+                'error',
+                'Error de Inventario',
+                `No se pudo actualizar el inventario:\n\n${result.message}\n\nPor favor, intente nuevamente o contacte al administrador.`
+            );
+            throw new Error(result.message);
+        }
+        
+        console.log('Inventario actualizado exitosamente:', result);
+        
+        // Actualizar el stock en el producto seleccionado para futuras validaciones
+        if (productoSeleccionado && productoSeleccionado.CodigoProd === datos.codigoProd) {
+            productoSeleccionado.existencia = result.existenciaNueva;
+        }
+        
+        // Actualizar el stock en la lista de productos disponibles
+        const productoEnLista = productosDisponibles.find(p => p.CodigoProd === datos.codigoProd);
+        if (productoEnLista) {
+            productoEnLista.existencia = result.existenciaNueva;
+        }
+        
+        // Actualizar la visualización de productos si el modal está abierto
+        const modal = document.getElementById('productosModal');
+        if (modal && modal.style.display === 'flex') {
+            mostrarProductos(productosDisponibles);
+        }
+        
+        return result;
+        
+    } catch (error) {
+        console.error('Error de conexión al actualizar inventario:', error);
+        throw error;
+    }
 }
 
 async function agregarOfertaProducto() {
@@ -605,10 +875,9 @@ async function agregarOfertaProducto() {
     
     // Convertir cantidad según el modo de venta
     let cantidadEnUnidadesEfectivas;
-    const unidadesPorFardo = productoSeleccionado.unidades || 1;
     
     if (modoVenta === 'fardos') {
-        cantidadEnUnidadesEfectivas = cantidad * unidadesPorFardo;
+        cantidadEnUnidadesEfectivas = cantidad * obtenerUnidadesPorFardo(productoSeleccionado);
     } else {
         cantidadEnUnidadesEfectivas = cantidad;
     }
@@ -644,6 +913,7 @@ async function agregarOfertaProducto() {
     
     // Llamar API para insertar producto inmediatamente en la base de datos
     // IMPORTANTE: Usar cantidadEnUnidadesEfectivas para la base de datos
+    // El inventario se actualiza automáticamente en el backend como operación atómica
     await insertarProductoInmediato({
         codigoSIN: pedidoId,
         codigoProd: productoSeleccionado.CodigoProd,
@@ -655,6 +925,25 @@ async function agregarOfertaProducto() {
         agregarOferta: 'TRUE',
         observaciones: autorizacion
     });
+    
+    // Actualizar inventario local para reflejar el cambio (incluyendo ofertas)
+    const stockAnterior = productoSeleccionado.existencia || 0;
+    const nuevoStock = stockAnterior - cantidadEnUnidadesEfectivas;
+    
+    // Actualizar el stock en el producto seleccionado
+    productoSeleccionado.existencia = nuevoStock;
+    
+    // Actualizar el stock en la lista de productos disponibles
+    const productoEnLista = productosDisponibles.find(p => p.CodigoProd === productoSeleccionado.CodigoProd);
+    if (productoEnLista) {
+        productoEnLista.existencia = nuevoStock;
+    }
+    
+    // Actualizar la visualización si el modal está abierto
+    const modal = document.getElementById('productosModal');
+    if (modal && modal.style.display === 'flex') {
+        mostrarProductos(productosDisponibles);
+    }
     
     actualizarListaProductos();
     actualizarTotal();
@@ -674,7 +963,6 @@ function actualizarListaProductos() {
     lista.innerHTML = productos.map(producto => {
         // Usar la función esProductoFardo que considera el campo TV como fuente de verdad
         const esModoFardos = esProductoFardo(producto);
-        const unidadesPorFardo = producto.unidades || 1;
         
         let cantidadMostrar, sufijo, precioMostrar;
         
@@ -683,7 +971,7 @@ function actualizarListaProductos() {
             cantidadMostrar = parseFloat(producto.cantidad.toFixed(2));
             sufijo = ' F';
             // Precio por fardo completo
-            precioMostrar = producto.precio * unidadesPorFardo;
+            precioMostrar = producto.precio * obtenerUnidadesPorFardo(producto);
         } else {
             // Modo unidades: mostrar cantidad en unidades con sufijo 'U'
             cantidadMostrar = producto.cantidad;
@@ -742,6 +1030,22 @@ async function eliminarProducto(id) {
             
             console.log('Producto eliminado exitosamente de la base de datos');
             
+            // Actualizar inventario local si se devolvieron unidades
+            if (result.cantidadDevuelta) {
+                // Actualizar el stock en el producto seleccionado si coincide
+                if (productoSeleccionado && productoSeleccionado.CodigoProd === producto.codigoProd) {
+                    productoSeleccionado.existencia = (productoSeleccionado.existencia || 0) + result.cantidadDevuelta;
+                }
+                
+                // Actualizar el stock en la lista de productos disponibles
+                const productoEnLista = productosDisponibles.find(p => p.CodigoProd === producto.codigoProd);
+                if (productoEnLista) {
+                    productoEnLista.existencia = (productoEnLista.existencia || 0) + result.cantidadDevuelta;
+                }
+                
+                console.log('Inventario local actualizado: +' + result.cantidadDevuelta + ' unidades para ' + producto.codigoProd);
+            }
+            
         } catch (error) {
             console.error('Error de conexión al eliminar producto:', error);
             alert('Error de conexión al eliminar el producto');
@@ -787,4 +1091,66 @@ function iniciarSwipe(productoId, event) {
     // Marcar como activo y guardar referencia
     swipeActive = true;
     productoAEliminar = producto;
+}
+
+// Función para cargar productos existentes de un pedido
+async function cargarProductosExistentes(codigoSIN) {
+    try {
+        console.log('=== CARGANDO PRODUCTOS EXISTENTES ===');
+        console.log('CodigoSIN:', codigoSIN);
+        
+        const response = await fetch('php/api/pedidos.php', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                action: 'obtener_productos_pedido',
+                codigoSIN: codigoSIN
+            })
+        });
+        
+        const result = await response.json();
+        console.log('Respuesta de productos existentes:', result);
+        
+        if (result.success && result.productos) {
+            // Limpiar array de productos actual
+            productos = [];
+            
+            // Cargar productos existentes
+            result.productos.forEach(producto => {
+                productos.push({
+                    id: producto.idDetalle, // Usar IDDetalle como identificador único
+                    idDetalle: producto.idDetalle, // Mantener referencia al IDDetalle
+                    codigoProd: producto.codigoProd,
+                    descripcion: producto.descripcion,
+                    contenido1: producto.contenido1,
+                    contenido2: producto.contenido2,
+                    cantidad: producto.cantidad,
+                    precio: producto.precio,
+                    importe: producto.importe,
+                    bonificacion: producto.bonificacion,
+                    descuento: producto.descuento,
+                    oferta: producto.oferta,
+                    autorizacion: producto.autorizacion,
+                    unidades: producto.unidades,
+                    tipoproducto: producto.tipoproducto,
+                    tv: producto.tv // Preservar campo TV de la base de datos
+                });
+            });
+            
+            // Actualizar la interfaz
+            actualizarListaProductos();
+            actualizarTotal();
+            
+            console.log('✅ Productos cargados exitosamente:', productos.length);
+        } else {
+            console.log('ℹ️ No hay productos existentes o error:', result.message);
+        }
+        
+    } catch (error) {
+        console.error('❌ Error al cargar productos existentes:', error);
+    }
+    
+    console.log('=== FIN CARGA PRODUCTOS EXISTENTES ===');
 }

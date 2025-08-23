@@ -1,0 +1,196 @@
+/* Estilos para el sistema de gestión de inventario */
+
+/* Botones deshabilitados en el modal de productos */
+.btn-add-producto-modal.disabled {
+    background-color: #cccccc !important;
+    color: #666666 !important;
+    cursor: not-allowed !important;
+    opacity: 0.6;
+}
+
+.btn-add-producto-modal.disabled:hover {
+    background-color: #cccccc !important;
+    transform: none !important;
+}
+
+/* Estilos para indicadores de stock */
+.producto-stock {
+    font-weight: bold;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.producto-stock i {
+    font-size: 12px;
+}
+
+/* Productos sin stock */
+.producto-item-modal:has(.btn-add-producto-modal.disabled) {
+    opacity: 0.7;
+    background-color: #f9f9f9;
+}
+
+/* Alertas de inventario */
+.inventory-alert {
+    padding: 10px;
+    margin: 10px 0;
+    border-radius: 4px;
+    font-weight: bold;
+}
+
+.inventory-alert.error {
+    background-color: #ffebee;
+    color: #c62828;
+    border: 1px solid #ef5350;
+}
+
+.inventory-alert.warning {
+    background-color: #fff3e0;
+    color: #ef6c00;
+    border: 1px solid #ff9800;
+}
+
+.inventory-alert.success {
+    background-color: #e8f5e8;
+    color: #2e7d32;
+    border: 1px solid #4caf50;
+}
+
+/* Indicador de stock en tiempo real */
+.stock-indicator {
+    display: inline-block;
+    padding: 2px 6px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: bold;
+    text-transform: uppercase;
+}
+
+.stock-indicator.high {
+    background-color: #e8f5e8;
+    color: #2e7d32;
+}
+
+.stock-indicator.low {
+    background-color: #fff3e0;
+    color: #ef6c00;
+}
+
+.stock-indicator.out {
+    background-color: #ffebee;
+    color: #c62828;
+}
+
+/* Modal de mensajes de inventario */
+.inventory-message-modal {
+    max-width: 350px;
+    width: 85%;
+    text-align: center;
+    z-index: 9999 !important;
+    position: relative;
+}
+
+/* Overlay del modal de inventario */
+#inventoryMessageModal {
+    z-index: 9999 !important;
+    background-color: rgba(0, 0, 0, 0.7) !important;
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    display: flex !important;
+    justify-content: center !important;
+    align-items: center !important;
+}
+
+.inventory-message-modal .modal-body {
+    padding: 20px 15px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 15px;
+    background: white;
+    border-radius: 8px;
+}
+
+.inventory-message-modal .message-icon {
+    margin-bottom: 5px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.inventory-message-modal .message-text {
+    font-size: 14px;
+    line-height: 1.4;
+    color: #333;
+    white-space: pre-line;
+    text-align: center;
+    max-width: 100%;
+    font-weight: 400;
+    padding: 5px;
+}
+
+.inventory-message-modal .modal-header {
+    background: #c62828;
+    color: white;
+    padding: 12px 15px;
+    border-radius: 8px 8px 0 0;
+    position: relative;
+}
+
+.inventory-message-modal .modal-header h3 {
+    margin: 0;
+    font-size: 1.1em;
+    font-weight: bold;
+}
+
+.inventory-message-modal .modal-close {
+    position: absolute;
+    right: 15px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    color: white;
+    font-size: 1.5em;
+    cursor: pointer;
+    padding: 5px;
+    border-radius: 3px;
+}
+
+.inventory-message-modal .modal-close:hover {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+.inventory-message-modal .modal-footer {
+    padding: 15px;
+    border-top: 1px solid #eee;
+    text-align: center;
+    background: white;
+    border-radius: 0 0 8px 8px;
+}
+
+.inventory-message-modal .btn {
+    padding: 8px 20px;
+    font-size: 14px;
+    border-radius: 4px;
+    border: none;
+    cursor: pointer;
+    font-weight: 600;
+    transition: all 0.2s ease;
+}
+
+.inventory-message-modal .btn-primary {
+    background-color: #1976d2;
+    color: white;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.inventory-message-modal .btn-primary:hover {
+    background-color: #1565c0;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+}

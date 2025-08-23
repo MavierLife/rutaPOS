@@ -54,6 +54,8 @@ if ($method === 'POST') {
         obtenerProductosPedido($pdo, $data);
     } elseif ($action === 'eliminar_producto_pedido') {
         eliminarProductoPedido($pdo, $data);
+    } elseif ($action === 'actualizar_inventario') {
+        actualizarInventario($pdo, $data);
     } else {
         error_log("API Pedidos - Acción no válida: " . $action);
         echo json_encode(['success' => false, 'message' => 'Acción no válida: ' . $action]);
@@ -339,6 +341,9 @@ function agregarProductoInmediato($pdo, $data) {
         error_log("API Pedidos - Iniciando agregarProductoInmediato");
         error_log("API Pedidos - Datos recibidos: " . json_encode($data));
         
+        // Iniciar transacción para operación atómica
+        $pdo->beginTransaction();
+        
         // Validar campos requeridos
         $required = ['codigoSIN', 'codigoProd', 'cantidad', 'precioVenta'];
         foreach ($required as $field) {
@@ -435,18 +440,41 @@ function agregarProductoInmediato($pdo, $data) {
             error_log("API Pedidos - Producto insertado en detalle: " . $data['codigoProd']);
         }
         
+        // Actualizar inventario restando las unidades vendidas
+        try {
+            $inventarioData = [
+                'codigoProd' => $data['codigoProd'],
+                'cantidad' => $data['cantidad'], // Cantidad ya está en unidades individuales
+                'operacion' => 'restar'
+            ];
+            
+            actualizarInventarioInterno($pdo, $inventarioData);
+            error_log("API Pedidos - Inventario actualizado: -" . $data['cantidad'] . " unidades para " . $data['codigoProd']);
+            
+        } catch (Exception $e) {
+            error_log("API Pedidos - Error al actualizar inventario: " . $e->getMessage());
+            $pdo->rollBack();
+            echo json_encode(['success' => false, 'message' => 'Error al actualizar inventario: ' . $e->getMessage()]);
+            return;
+        }
+        
+        // Confirmar transacción
+        $pdo->commit();
+        
         echo json_encode([
             'success' => true,
-            'message' => 'Producto agregado al detalle del pedido',
+            'message' => 'Producto agregado al detalle del pedido e inventario actualizado',
             'codigoSIN' => $data['codigoSIN'],
             'codigoProd' => $data['codigoProd'],
             'idProducto' => $producto['idimportacion']
         ]);
         
     } catch(PDOException $e) {
+        $pdo->rollBack();
         error_log("API Pedidos - Error PDO en agregarProductoInmediato: " . $e->getMessage());
         echo json_encode(['success' => false, 'message' => 'Error al agregar producto: ' . $e->getMessage()]);
     } catch(Exception $e) {
+        $pdo->rollBack();
         error_log("API Pedidos - Error general en agregarProductoInmediato: " . $e->getMessage());
         echo json_encode(['success' => false, 'message' => 'Error inesperado: ' . $e->getMessage()]);
     }
@@ -570,6 +598,9 @@ function eliminarProductoPedido($pdo, $data) {
         error_log("API Pedidos - Iniciando eliminarProductoPedido");
         error_log("API Pedidos - Datos recibidos: " . json_encode($data));
         
+        // Iniciar transacción para operación atómica
+        $pdo->beginTransaction();
+        
         // Validar campos requeridos
         $required = ['codigoSIN', 'codigoProd'];
         foreach ($required as $field) {
@@ -596,8 +627,8 @@ function eliminarProductoPedido($pdo, $data) {
             return;
         }
         
-        // Verificar si el producto existe en el detalle del pedido (incluyendo TV para distinguir fardo/unidad)
-        $existeSql = "SELECT CodigoProd FROM tbldetalledepedido WHERE CodigoSIN = :codigoSIN AND CodigoProd = :codigoProd AND TV = :tv";
+        // Obtener información del producto antes de eliminarlo (incluyendo cantidad para reversión de inventario)
+        $existeSql = "SELECT CodigoProd, Cantidad FROM tbldetalledepedido WHERE CodigoSIN = :codigoSIN AND CodigoProd = :codigoProd AND TV = :tv";
         $existeStmt = $pdo->prepare($existeSql);
         $existeStmt->execute([
             ':codigoSIN' => $data['codigoSIN'],
@@ -605,11 +636,15 @@ function eliminarProductoPedido($pdo, $data) {
             ':tv' => $data['tv'] ?? ''
         ]);
         
-        if (!$existeStmt->fetch()) {
+        $productoDetalle = $existeStmt->fetch(PDO::FETCH_ASSOC);
+        if (!$productoDetalle) {
             error_log("API Pedidos - Producto no encontrado en el detalle: " . $data['codigoProd']);
             echo json_encode(['success' => false, 'message' => 'Producto no encontrado en el pedido']);
             return;
         }
+        
+        // Guardar la cantidad para reversión de inventario
+        $cantidadADevolver = (int)$productoDetalle['Cantidad']; // Cantidad en unidades individuales
         
         // Eliminar el producto del detalle del pedido (incluyendo TV para distinguir fardo/unidad)
         $deleteSql = "DELETE FROM tbldetalledepedido WHERE CodigoSIN = :codigoSIN AND CodigoProd = :codigoProd AND TV = :tv";
@@ -623,11 +658,35 @@ function eliminarProductoPedido($pdo, $data) {
         if ($result) {
             error_log("API Pedidos - Producto eliminado del detalle: " . $data['codigoProd']);
             
+            // Devolver las unidades al inventario
+            try {
+                $inventarioData = [
+                    'codigoProd' => $data['codigoProd'],
+                    'cantidad' => $cantidadADevolver,
+                    'operacion' => 'sumar'
+                ];
+                
+                // Llamar a la función actualizarInventario internamente
+                actualizarInventarioInterno($pdo, $inventarioData);
+                
+                error_log("API Pedidos - Inventario restaurado: " . $cantidadADevolver . " unidades devueltas para " . $data['codigoProd']);
+                
+            } catch (Exception $e) {
+                error_log("API Pedidos - Error al restaurar inventario: " . $e->getMessage());
+                $pdo->rollBack();
+                echo json_encode(['success' => false, 'message' => 'Error al restaurar inventario: ' . $e->getMessage()]);
+                return;
+            }
+            
+            // Confirmar transacción
+            $pdo->commit();
+            
             echo json_encode([
                 'success' => true,
-                'message' => 'Producto eliminado del pedido',
+                'message' => 'Producto eliminado del pedido e inventario restaurado',
                 'codigoSIN' => $data['codigoSIN'],
-                'codigoProd' => $data['codigoProd']
+                'codigoProd' => $data['codigoProd'],
+                'cantidadDevuelta' => $cantidadADevolver
             ]);
         } else {
             error_log("API Pedidos - Error al eliminar producto: " . $data['codigoProd']);
@@ -635,11 +694,161 @@ function eliminarProductoPedido($pdo, $data) {
         }
         
     } catch(PDOException $e) {
+        $pdo->rollBack();
         error_log("API Pedidos - Error PDO en eliminarProductoPedido: " . $e->getMessage());
         echo json_encode(['success' => false, 'message' => 'Error al eliminar producto: ' . $e->getMessage()]);
     } catch(Exception $e) {
+        $pdo->rollBack();
         error_log("API Pedidos - Error general en eliminarProductoPedido: " . $e->getMessage());
         echo json_encode(['success' => false, 'message' => 'Error inesperado: ' . $e->getMessage()]);
     }
+}
+
+function actualizarInventario($pdo, $data) {
+    try {
+        error_log("API Pedidos - Iniciando actualizarInventario");
+        error_log("API Pedidos - Datos recibidos: " . json_encode($data));
+        
+        // Validar campos requeridos
+        $required = ['codigoProd', 'cantidad', 'operacion'];
+        foreach ($required as $field) {
+            if (!isset($data[$field]) || $data[$field] === '') {
+                error_log("API Pedidos - Campo requerido faltante: $field");
+                echo json_encode(['success' => false, 'message' => "Campo requerido: $field"]);
+                return;
+            }
+        }
+        
+        // Validar que la operación sea válida ('restar' o 'sumar')
+        if (!in_array($data['operacion'], ['restar', 'sumar'])) {
+            error_log("API Pedidos - Operación no válida: " . $data['operacion']);
+            echo json_encode(['success' => false, 'message' => 'Operación no válida. Use: restar o sumar']);
+            return;
+        }
+        
+        // Obtener información actual del producto
+        $productoSql = "SELECT existencia, unidades, descripcion FROM tblcatalogodeproductos WHERE CodigoProd = :codigoProd";
+        $productoStmt = $pdo->prepare($productoSql);
+        $productoStmt->execute([':codigoProd' => $data['codigoProd']]);
+        $producto = $productoStmt->fetch(PDO::FETCH_ASSOC);
+        
+        if (!$producto) {
+            error_log("API Pedidos - Producto no encontrado: " . $data['codigoProd']);
+            echo json_encode(['success' => false, 'message' => 'Producto no encontrado']);
+            return;
+        }
+        
+        $existenciaActual = (int)$producto['existencia'];
+        $cantidadCambio = (int)$data['cantidad'];
+        
+        // Calcular nueva existencia según la operación
+        if ($data['operacion'] === 'restar') {
+            $nuevaExistencia = $existenciaActual - $cantidadCambio;
+            
+            // Validar que no quede en negativo
+            if ($nuevaExistencia < 0) {
+                error_log("API Pedidos - Operación resultaría en stock negativo");
+                echo json_encode([
+                    'success' => false, 
+                    'message' => 'Stock insuficiente. Disponible: ' . $existenciaActual . ', Solicitado: ' . $cantidadCambio
+                ]);
+                return;
+            }
+        } else { // sumar
+            $nuevaExistencia = $existenciaActual + $cantidadCambio;
+        }
+        
+        // Actualizar existencia en la base de datos
+        $updateSql = "UPDATE tblcatalogodeproductos SET existencia = :nuevaExistencia WHERE CodigoProd = :codigoProd";
+        $updateStmt = $pdo->prepare($updateSql);
+        $result = $updateStmt->execute([
+            ':nuevaExistencia' => $nuevaExistencia,
+            ':codigoProd' => $data['codigoProd']
+        ]);
+        
+        if ($result) {
+            error_log("API Pedidos - Inventario actualizado: " . $data['codigoProd'] . " de " . $existenciaActual . " a " . $nuevaExistencia);
+            
+            echo json_encode([
+                'success' => true,
+                'message' => 'Inventario actualizado correctamente',
+                'codigoProd' => $data['codigoProd'],
+                'existenciaAnterior' => $existenciaActual,
+                'existenciaNueva' => $nuevaExistencia,
+                'operacion' => $data['operacion'],
+                'cantidad' => $cantidadCambio
+            ]);
+        } else {
+            error_log("API Pedidos - Error al actualizar inventario: " . $data['codigoProd']);
+            echo json_encode(['success' => false, 'message' => 'Error al actualizar inventario']);
+        }
+        
+    } catch(PDOException $e) {
+        error_log("API Pedidos - Error PDO en actualizarInventario: " . $e->getMessage());
+        echo json_encode(['success' => false, 'message' => 'Error al actualizar inventario: ' . $e->getMessage()]);
+    } catch(Exception $e) {
+        error_log("API Pedidos - Error general en actualizarInventario: " . $e->getMessage());
+        echo json_encode(['success' => false, 'message' => 'Error inesperado: ' . $e->getMessage()]);
+    }
+}
+
+// Función interna para actualizar inventario sin enviar respuesta JSON
+function actualizarInventarioInterno($pdo, $data) {
+    // Validar campos requeridos
+    $required = ['codigoProd', 'cantidad', 'operacion'];
+    foreach ($required as $field) {
+        if (!isset($data[$field]) || $data[$field] === '') {
+            throw new Exception("Campo requerido faltante: $field");
+        }
+    }
+    
+    // Validar que la operación sea válida ('restar' o 'sumar')
+    if (!in_array($data['operacion'], ['restar', 'sumar'])) {
+        throw new Exception('Operación no válida. Use: restar o sumar');
+    }
+    
+    // Obtener información actual del producto
+    $productoSql = "SELECT existencia, unidades, descripcion FROM tblcatalogodeproductos WHERE CodigoProd = :codigoProd";
+    $productoStmt = $pdo->prepare($productoSql);
+    $productoStmt->execute([':codigoProd' => $data['codigoProd']]);
+    $producto = $productoStmt->fetch(PDO::FETCH_ASSOC);
+    
+    if (!$producto) {
+        throw new Exception('Producto no encontrado: ' . $data['codigoProd']);
+    }
+    
+    $existenciaActual = (int)$producto['existencia'];
+    $cantidadCambio = (int)$data['cantidad'];
+    
+    // Calcular nueva existencia según la operación
+    if ($data['operacion'] === 'restar') {
+        $nuevaExistencia = $existenciaActual - $cantidadCambio;
+        
+        // Validar que no quede en negativo
+        if ($nuevaExistencia < 0) {
+            throw new Exception('Stock insuficiente. Disponible: ' . $existenciaActual . ', Solicitado: ' . $cantidadCambio);
+        }
+    } else { // sumar
+        $nuevaExistencia = $existenciaActual + $cantidadCambio;
+    }
+    
+    // Actualizar existencia en la base de datos
+    $updateSql = "UPDATE tblcatalogodeproductos SET existencia = :nuevaExistencia WHERE CodigoProd = :codigoProd";
+    $updateStmt = $pdo->prepare($updateSql);
+    $result = $updateStmt->execute([
+        ':nuevaExistencia' => $nuevaExistencia,
+        ':codigoProd' => $data['codigoProd']
+    ]);
+    
+    if (!$result) {
+        throw new Exception('Error al actualizar inventario en la base de datos');
+    }
+    
+    return [
+        'existenciaAnterior' => $existenciaActual,
+        'existenciaNueva' => $nuevaExistencia,
+        'operacion' => $data['operacion'],
+        'cantidad' => $cantidadCambio
+    ];
 }
 ?>
