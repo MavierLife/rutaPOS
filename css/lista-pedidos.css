@@ -1,0 +1,249 @@
+.lista-pedidos-container {
+    max-width: 100%;
+    margin: 0 auto;
+    background: white;
+    border-radius: 8px;
+    overflow: hidden;
+}
+
+.pedidos-section {
+    background: #1e88e5;
+    color: white;
+    padding: 15px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.pedidos-section i {
+    font-size: 24px;
+}
+
+.pedidos-section h2 {
+    margin: 0;
+    font-size: 20px;
+    font-weight: bold;
+}
+
+.operador-vendedor {
+    background: #f5f5f5;
+    padding: 10px;
+    text-align: center;
+    border-bottom: 1px solid #ddd;
+}
+
+.operador-text {
+    color: #666;
+    font-size: 12px;
+    margin: 0;
+}
+
+.vendedor-text {
+    color: #333;
+    font-size: 14px;
+    font-weight: bold;
+    margin: 5px 0 0 0;
+}
+
+.botones-totales {
+    display: flex;
+    background: white;
+    border-bottom: 1px solid #ddd;
+}
+
+.btn-total {
+    flex: 1;
+    padding: 10px;
+    border: none;
+    background: #f8f9fa;
+    border-right: 1px solid #ddd;
+    cursor: pointer;
+    font-size: 12px;
+    text-align: center;
+}
+
+.btn-total:last-child {
+    border-right: none;
+}
+
+.btn-total.active {
+    background: #e3f2fd;
+    color: #1976d2;
+}
+
+.btn-total .total-label {
+    display: block;
+    font-weight: bold;
+    margin-bottom: 2px;
+}
+
+.btn-total .total-amount {
+    display: block;
+    font-size: 14px;
+    font-weight: bold;
+}
+
+.tabla-pedidos {
+    background: white;
+}
+
+.tabla-header {
+    background: #1976d2;
+    color: white;
+    display: flex;
+    padding: 8px;
+    font-weight: bold;
+    font-size: 12px;
+}
+
+.col-cliente {
+    flex: 3;
+    padding: 0 5px;
+}
+
+.col-contado {
+    flex: 1;
+    text-align: center;
+    padding: 0 5px;
+}
+
+.col-credito {
+    flex: 1;
+    text-align: center;
+    padding: 0 5px;
+}
+
+.col-opciones {
+    flex: 1;
+    text-align: center;
+    padding: 0 5px;
+}
+
+.pedido-row {
+    display: flex;
+    padding: 8px;
+    border-bottom: 1px solid #eee;
+    align-items: center;
+}
+
+.pedido-row.completado {
+    background-color: #e8f5e8;
+    color: #2e7d32;
+}
+
+.pedido-row.en-proceso {
+    background-color: #fff3e0;
+    color: #f57c00;
+}
+
+.cliente-info {
+    flex: 3;
+    padding: 0 5px;
+}
+
+.cliente-nombre {
+    font-weight: bold;
+    font-size: 13px;
+}
+
+.cliente-codigo {
+    font-size: 11px;
+    color: #666;
+}
+
+.monto-contado {
+    flex: 1;
+    text-align: center;
+    padding: 0 5px;
+    font-weight: bold;
+}
+
+.monto-credito {
+    flex: 1;
+    text-align: center;
+    padding: 0 5px;
+    font-weight: bold;
+}
+
+.acciones {
+    flex: 1;
+    text-align: center;
+    padding: 0 5px;
+}
+
+.btn-accion {
+    background: none;
+    border: none;
+    cursor: pointer;
+    margin: 0 2px;
+    padding: 4px;
+    border-radius: 3px;
+}
+
+.btn-editar {
+    background: #e3f2fd;
+    color: #1976d2;
+}
+
+.btn-eliminar {
+    background: #ffebee;
+    color: #d32f2f;
+}
+
+.contador-registros {
+    padding: 10px;
+    background: #f5f5f5;
+    font-size: 12px;
+    color: #666;
+}
+
+.botones-inferiores {
+    padding: 15px;
+    background: white;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.btn-enviar {
+    background: #1976d2;
+    color: white;
+    border: none;
+    padding: 12px;
+    border-radius: 5px;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.btn-backup {
+    background: #4caf50;
+    color: white;
+    border: none;
+    padding: 12px;
+    border-radius: 5px;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.loading {
+    text-align: center;
+    padding: 20px;
+    color: #666;
+}
+
+.btn-cerrar {
+    background: #1976d2;
+    color: white;
+    border: none;
+    padding: 12px 20px;
+    border-radius: 5px;
+    font-weight: bold;
+    cursor: pointer;
+    width: 100%;
+    margin-top: 15px;
+    font-size: 14px;
+}
+
+.btn-cerrar:hover {
+    background: #1565c0;
+}

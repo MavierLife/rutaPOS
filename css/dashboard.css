@@ -1,0 +1,179 @@
+/* Dashboard CSS - Estilos específicos para la página del dashboard */
+
+/* Login Page Styles */
+.login-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+}
+
+.login-container .brand-header {
+    width: 100%;
+}
+
+.login-container .eqp-code {
+    font-size: 1.2em;
+    font-weight: bold;
+    color: #0056b3;
+    text-align: left;
+}
+
+.login-container .logo {
+    margin: 15px 0;
+}
+
+.login-container .logo img {
+    max-width: 250px;
+}
+
+/* Dashboard logo - smaller size */
+.dashboard-logo-img {
+    max-width: 180px !important;
+    height: auto !important;
+    width: auto !important;
+}
+
+.login-container .avatar {
+    font-size: 80px; /* Or use an image */
+    color: #0056b3;
+    margin: 20px 0;
+}
+
+.login-form .input-group {
+    display: flex;
+    margin-bottom: 15px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+}
+
+.login-form .input-icon {
+    background-color: #007bff;
+    color: white;
+    padding: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 40px;
+}
+
+.login-form input {
+    flex-grow: 1;
+    border: none;
+    padding: 10px;
+    font-size: 1em;
+}
+
+.login-form input:focus {
+    outline: none;
+}
+
+/* Dashboard Page Styles */
+.dashboard-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+    padding: 0 20px;
+    box-sizing: border-box;
+}
+
+.dashboard-header .hamburger-menu {
+    font-size: 24px;
+    cursor: pointer;
+}
+
+.dashboard-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+}
+
+.dashboard-container .info-box {
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    padding: 8px;
+    margin: 5px 0;
+    width: 100%;
+    max-width: 300px;
+    box-sizing: border-box;
+    font-size: 1.1em;
+}
+
+.info-box.operator {
+    color: #0056b3;
+    font-weight: bold;
+}
+
+.info-box.day {
+    color: green;
+    font-weight: bold;
+}
+
+.menu-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 15px;
+    width: 100%;
+    margin-top: 20px;
+}
+
+.menu-button {
+    background-color: #005c9e;
+    color: white;
+    border: none;
+    border-radius: 25px;
+    padding: 15px;
+    font-size: 1em;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    font-weight: bold;
+}
+
+.menu-button .icon {
+    font-size: 1.5em;
+}
+
+.sync-section {
+    margin-top: 30px;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+.sync-button {
+    background-color: #005c9e;
+    color: white;
+    border: none;
+    border-radius: 25px;
+    padding: 15px;
+    font-size: 1.2em;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    font-weight: bold;
+    width: 100%;
+    max-width: 300px;
+}
+
+.sync-section .last-sync {
+    color: red;
+    margin-top: 10px;
+    font-size: 0.9em;
+}
+
+.power-button {
+    margin-top: 30px;
+    background: none;
+    border: none;
+}
+
+.power-button img {
+    width: 60px;
+    cursor: pointer;
+}
