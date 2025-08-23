@@ -12,16 +12,41 @@ let productoSeleccionado = null;
 let modoVenta = 'fardos'; // 'fardos' o 'unidades'
 let tipoPrecionActual = 'especial';
 
-// Variables para swipe y eliminación
+// Variables para funcionalidad de swipe
+let swipeActive = false;
 let swipeStartX = 0;
 let swipeStartY = 0;
 let swipeStartTime = 0;
 let productoAEliminar = null;
-let swipeActive = false;
+
+
 
 // Función helper para obtener unidades por fardo
 function obtenerUnidadesPorFardo(producto) {
     return producto ? (producto.unidades || 1) : 1;
+}
+
+// Función para actualizar el stock en formato F/U en el modal
+function actualizarStockModal(producto) {
+    if (!producto) return;
+    
+    const unidadesMinimasElement = document.getElementById('unidadesMinimas');
+    const stockMinimoElement = document.getElementById('stockMinimo');
+    
+    if (!unidadesMinimasElement || !stockMinimoElement) return;
+    
+    const stockTotal = producto.existencia || 0;
+    const unidadesPorFardo = obtenerUnidadesPorFardo(producto);
+    
+    // Calcular fardos y unidades sueltas
+    const fardos = Math.floor(stockTotal / unidadesPorFardo);
+    const unidadesSueltas = stockTotal % unidadesPorFardo;
+    
+    // Mostrar en formato F/U
+    unidadesMinimasElement.textContent = fardos + 'F';
+    stockMinimoElement.textContent = unidadesSueltas + 'U';
+    
+    console.log(`Stock actualizado: ${fardos}F/${unidadesSueltas}U (Total: ${stockTotal})`);
 }
 
 // Configurar tipo de pago
@@ -196,19 +221,8 @@ function seleccionarProducto(codigoProducto) {
             console.log('Título actualizado con descripción y contenido');
         }
         
-        // Actualizar stock
-        const unidadesMinimasElement = document.getElementById('unidadesMinimas');
-        const stockMinimoElement = document.getElementById('stockMinimo');
-        
-        if (unidadesMinimasElement) {
-            unidadesMinimasElement.textContent = '1';
-            console.log('Unidades mínimas actualizado: 1');
-        }
-        
-        if (stockMinimoElement) {
-            stockMinimoElement.textContent = producto.existencia || '0';
-            console.log('Stock actualizado:', producto.existencia || '0');
-        }
+        // Actualizar stock en formato F/U
+        actualizarStockModal(producto);
         
         // Resetear modo a fardos por defecto
         modoVenta = 'fardos';
@@ -345,6 +359,9 @@ function toggleModoVenta() {
         // Mantener la cantidad actual (no recalcular)
         document.getElementById('cantidadInput').value = cantidadActual;
     }
+    
+    // Actualizar stock según el nuevo modo
+    actualizarStockModal(productoSeleccionado);
     
     // Recalcular precio y total
      actualizarPrecioSegunTipo(tipoPrecionActual);

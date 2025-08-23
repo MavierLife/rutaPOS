@@ -174,6 +174,22 @@ async function limpiarSesionPedido() {
     }
 }
 
+// Función para inicializar automáticamente el tipo de pago basado en crédito autorizado
+function inicializarTipoPagoAutomatico() {
+    console.log('=== INICIALIZANDO TIPO DE PAGO AUTOMÁTICO ===');
+    console.log('Cliente tiene crédito autorizado:', clienteData.creditoAutorizado);
+    
+    if (clienteData.creditoAutorizado) {
+        // Si el cliente tiene crédito autorizado, seleccionar automáticamente crédito
+        console.log('✅ Seleccionando automáticamente tipo de pago: CRÉDITO');
+        cambiarTipoPago('credito');
+    } else {
+        // Si no tiene crédito autorizado, mantener contado
+        console.log('✅ Manteniendo tipo de pago: CONTADO');
+        cambiarTipoPago('contado');
+    }
+}
+
 function cambiarTipoPago(tipo) {
     // Validar si se puede seleccionar crédito
     if (tipo === 'credito' && !clienteData.creditoAutorizado) {
@@ -231,12 +247,16 @@ async function registrarPedidoInicial() {
     console.log('clienteData:', clienteData);
     
     try {
+        // Determinar condición de pago basada en crédito autorizado del cliente
+        const condicionPago = clienteData.creditoAutorizado ? 2 : 1; // 2 = crédito, 1 = contado
+        const plazoPago = clienteData.creditoAutorizado ? clienteData.plazoEstablecido : 0;
+        
         const pedidoInicialData = {
             codigoSIN: pedidoId,
             codigoCli: clienteData.codigo,
             tipoDocumento: clienteData.tipoDocumento,
-            condicion: 1, // Por defecto contado
-            plazo: 0,
+            condicion: condicionPago,
+            plazo: plazoPago,
             notas: ''
         };
         

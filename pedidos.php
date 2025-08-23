@@ -186,10 +186,10 @@ if (isset($_GET['editar']) && !empty($_GET['editar'])) {
                 
                 <div class="tipo-pago-section">
                     <div class="tipo-pago-tabs">
-                        <button class="btn-tipo-pago active" data-tipo="contado" onclick="cambiarTipoPago('contado')">Contado</button>
-                        <button class="btn-tipo-pago<?php echo !$clienteCreditoAutorizado ? ' disabled' : ''; ?>" data-tipo="credito" onclick="cambiarTipoPago('credito')"<?php echo !$clienteCreditoAutorizado ? ' disabled' : ''; ?>>Crédito</button>
+                        <button class="btn-tipo-pago<?php echo !$clienteCreditoAutorizado ? ' active' : ''; ?>" data-tipo="contado" onclick="cambiarTipoPago('contado')">Contado</button>
+                        <button class="btn-tipo-pago<?php echo !$clienteCreditoAutorizado ? ' disabled' : ' active'; ?>" data-tipo="credito" onclick="cambiarTipoPago('credito')"<?php echo !$clienteCreditoAutorizado ? ' disabled' : ''; ?>>Crédito</button>
                     </div>
-                    <input type="number" id="diasCredito" placeholder="Días (máx: <?php echo $clientePlazoEstablecido; ?>)" class="dias-credito" style="display: none;" max="<?php echo $clientePlazoEstablecido; ?>">
+                    <input type="number" id="diasCredito" placeholder="Días (máx: <?php echo $clientePlazoEstablecido; ?>)" class="dias-credito" style="<?php echo $clienteCreditoAutorizado ? 'display: block;' : 'display: none;'; ?>" max="<?php echo $clientePlazoEstablecido; ?>" value="<?php echo $clienteCreditoAutorizado ? $clientePlazoEstablecido : ''; ?>">
                 </div>
                 
                 <div class="total-section">
@@ -399,6 +399,9 @@ if (isset($_GET['editar']) && !empty($_GET['editar'])) {
             console.log('=== DOM CONTENT LOADED ===');
             console.log('clienteData disponible:', clienteData);
             console.log('modoEdicion:', <?php echo $modoEdicion ? 'true' : 'false'; ?>);
+            
+            // Inicializar tipo de pago automáticamente basado en crédito autorizado
+            inicializarTipoPagoAutomatico();
             
             // Verificar si es un nuevo pedido basado en los parámetros de la URL
             const urlParams = new URLSearchParams(window.location.search);

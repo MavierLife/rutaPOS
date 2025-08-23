@@ -56,6 +56,8 @@ if ($method === 'POST') {
         eliminarProductoPedido($pdo, $data);
     } elseif ($action === 'actualizar_inventario') {
         actualizarInventario($pdo, $data);
+    } elseif ($action === 'eliminar_pedido') {
+        eliminarPedidoCompleto($pdo, $data);
     } else {
         error_log("API Pedidos - Acción no válida: " . $action);
         echo json_encode(['success' => false, 'message' => 'Acción no válida: ' . $action]);
@@ -241,7 +243,7 @@ function listarPedidos($pdo) {
     try {
         error_log("API Pedidos - Iniciando listarPedidos");
         
-        // Consulta para obtener pedidos con información del cliente
+        // Consulta para obtener pedidos con información del cliente y monto calculado dinámicamente
         $sql = "SELECT 
             p.CodigoSIN,
             p.FechaIngreso,
@@ -252,7 +254,7 @@ function listarPedidos($pdo) {
             p.Plazo,
             p.CodigoCli,
             p.IDOperador,
-            p.ImporteTotal,
+            COALESCE(d.ImporteCalculado, 0) as ImporteTotal,
             p.Ok,
             p.Anulada,
             p.Notas,
@@ -262,6 +264,13 @@ function listarPedidos($pdo) {
             c.Establecimiento as EstablecimientoCliente
         FROM tblregistrodepedidos p
         LEFT JOIN tblcatalogodeclientes c ON p.CodigoCli = c.CodigoCli
+        LEFT JOIN (
+            SELECT 
+                CodigoSIN,
+                SUM(PrecioVenta * CAST(Cantidad AS DECIMAL(10,2))) as ImporteCalculado
+            FROM tbldetalledepedido 
+            GROUP BY CodigoSIN
+        ) d ON p.CodigoSIN = d.CodigoSIN
         ORDER BY p.FechaIngreso DESC, p.HoraIngreso DESC";
         
         $stmt = $pdo->prepare($sql);
@@ -850,5 +859,77 @@ function actualizarInventarioInterno($pdo, $data) {
         'operacion' => $data['operacion'],
         'cantidad' => $cantidadCambio
     ];
+}
+
+function eliminarPedidoCompleto($pdo, $data) {
+    try {
+        error_log("API Pedidos - Iniciando eliminarPedidoCompleto");
+        error_log("API Pedidos - Datos recibidos: " . json_encode($data));
+        
+        // Validar campo requerido
+        if (!isset($data['codigoSIN']) || $data['codigoSIN'] === '') {
+            error_log("API Pedidos - CodigoSIN requerido");
+            echo json_encode(['success' => false, 'message' => 'CodigoSIN es requerido']);
+            return;
+        }
+        
+        // Iniciar transacción para operación atómica
+        $pdo->beginTransaction();
+        
+        // Verificar que el pedido existe
+        $checkSql = "SELECT CodigoSIN FROM tblregistrodepedidos WHERE CodigoSIN = :codigoSIN";
+        $checkStmt = $pdo->prepare($checkSql);
+        $checkStmt->execute([':codigoSIN' => $data['codigoSIN']]);
+        
+        if (!$checkStmt->fetch()) {
+            error_log("API Pedidos - Pedido no encontrado: " . $data['codigoSIN']);
+            echo json_encode(['success' => false, 'message' => 'Pedido no encontrado']);
+            return;
+        }
+        
+        // Primero eliminar todos los detalles del pedido
+        $deleteDetallesSql = "DELETE FROM tbldetalledepedido WHERE CodigoSIN = :codigoSIN";
+        $deleteDetallesStmt = $pdo->prepare($deleteDetallesSql);
+        $resultDetalles = $deleteDetallesStmt->execute([':codigoSIN' => $data['codigoSIN']]);
+        
+        if (!$resultDetalles) {
+            $pdo->rollBack();
+            error_log("API Pedidos - Error al eliminar detalles del pedido: " . $data['codigoSIN']);
+            echo json_encode(['success' => false, 'message' => 'Error al eliminar detalles del pedido']);
+            return;
+        }
+        
+        // Luego eliminar el registro principal del pedido
+        $deletePedidoSql = "DELETE FROM tblregistrodepedidos WHERE CodigoSIN = :codigoSIN";
+        $deletePedidoStmt = $pdo->prepare($deletePedidoSql);
+        $resultPedido = $deletePedidoStmt->execute([':codigoSIN' => $data['codigoSIN']]);
+        
+        if (!$resultPedido) {
+            $pdo->rollBack();
+            error_log("API Pedidos - Error al eliminar pedido: " . $data['codigoSIN']);
+            echo json_encode(['success' => false, 'message' => 'Error al eliminar pedido']);
+            return;
+        }
+        
+        // Confirmar transacción
+        $pdo->commit();
+        
+        error_log("API Pedidos - Pedido eliminado exitosamente: " . $data['codigoSIN']);
+        
+        echo json_encode([
+            'success' => true,
+            'message' => 'Pedido eliminado exitosamente',
+            'codigoSIN' => $data['codigoSIN']
+        ]);
+        
+    } catch(PDOException $e) {
+        $pdo->rollBack();
+        error_log("API Pedidos - Error PDO en eliminarPedidoCompleto: " . $e->getMessage());
+        echo json_encode(['success' => false, 'message' => 'Error al eliminar pedido: ' . $e->getMessage()]);
+    } catch(Exception $e) {
+        $pdo->rollBack();
+        error_log("API Pedidos - Error general en eliminarPedidoCompleto: " . $e->getMessage());
+        echo json_encode(['success' => false, 'message' => 'Error inesperado: ' . $e->getMessage()]);
+    }
 }
 ?>
