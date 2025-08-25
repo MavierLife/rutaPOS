@@ -222,6 +222,13 @@ function generarArchivoExportacion($pedidos) {
         // Escribir línea de encabezados (opcional, comentar si no se desea)
         fwrite($archivo, '"' . implode('","', $encabezados) . '"' . "\n");
         
+        // Definir campos que NO deben llevar comillas (campos numéricos y fechas)
+        $camposSinComillas = [
+            'FechaIngreso', 'HoraIngreso', 'Condicion', 'Plazo', 'IDVendedor', 'Ok', 'Anulada', 
+            'Cantidad', 'Bonificacion', 'Descuento', 'AgregarOferta', 'TipoDeCliente', 'IDMunicipio', 'IDDepartamento', 
+            'IDempleado', 'IDZona', 'TipoDocumentoEstablecido', 'CondicionEstablecida'
+        ];
+        
         // Escribir datos
         foreach ($pedidos as $pedido) {
             $linea = [];
@@ -231,7 +238,27 @@ function generarArchivoExportacion($pedidos) {
                 
                 // Formatear valores especiales
                 if ($campo === 'FechaIngreso' && $valor) {
-                    $valor = date('j/n/Y G:i:s', strtotime($valor));
+                    // La fecha viene en formato d/m/Y desde la BD, necesitamos convertirla
+                    try {
+                        // Intentar parsear con el formato esperado d/m/Y
+                        $fecha = DateTime::createFromFormat('d/m/Y', $valor);
+                        if ($fecha !== false) {
+                            // Formatear como d/m/Y H:i:s con hora 0:00:00
+                            $valor = $fecha->format('j/n/Y') . ' 0:00:00';
+                        } else {
+                            // Fallback: intentar con otros formatos comunes
+                            $timestamp = strtotime($valor);
+                            if ($timestamp !== false) {
+                                $valor = date('j/n/Y', $timestamp) . ' 0:00:00';
+                            } else {
+                                // Si todo falla, usar fecha actual
+                                $valor = date('j/n/Y') . ' 0:00:00';
+                            }
+                        }
+                    } catch (Exception $e) {
+                        // En caso de excepción, usar fecha actual
+                        $valor = date('j/n/Y') . ' 0:00:00';
+                    }
                 } elseif ($campo === 'HoraIngreso' && $valor) {
                     $valor = date('j/n/Y G:i:s', strtotime('1899-12-30 ' . $valor));
                 } elseif ($campo === 'PrecioVenta' && is_numeric($valor)) {
@@ -241,11 +268,36 @@ function generarArchivoExportacion($pedidos) {
                 } elseif ($campo === 'UbicacionGPS' && $valor) {
                     // Mantener formato de URL de Google Maps
                     $valor = trim($valor);
+                } elseif ($campo === 'AgregarOferta') {
+                    // Convertir TRUE/FALSE a 1/0
+                    if (strtoupper($valor) === 'TRUE') {
+                        $valor = '1';
+                    } elseif (strtoupper($valor) === 'FALSE') {
+                        $valor = '0';
+                    }
                 }
                 
-                // Escapar comillas en el valor
-                $valor = str_replace('"', '""', $valor);
-                $linea[] = '"' . $valor . '"';
+                // Manejar campos vacíos: convertir a vacío real (no "")
+                if ($valor === null || $valor === '' || $valor === 'NULL') {
+                    $valor = '';
+                }
+                
+                // Aplicar comillas según el tipo de campo
+                if (in_array($campo, $camposSinComillas)) {
+                    // Campos numéricos y fechas sin comillas
+                    // Si está vacío, agregar sin comillas
+                    $linea[] = $valor === '' ? '' : $valor;
+                } else {
+                    // Campos de texto con comillas
+                    if ($valor === '') {
+                        // Campo vacío sin comillas
+                        $linea[] = '';
+                    } else {
+                        // Escapar comillas en el valor
+                        $valor = str_replace('"', '""', $valor);
+                        $linea[] = '"' . $valor . '"';
+                    }
+                }
             }
             
             fwrite($archivo, implode(',', $linea) . "\n");
