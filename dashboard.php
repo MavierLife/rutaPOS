@@ -49,7 +49,7 @@ $dayOfWeek = strtoupper(strftime('%A'));
                 <button class="menu-button" onclick="window.location.href='lista-pedidos.php'"><i class="icon fas fa-shopping-basket"></i> Pedidos</button>
                 <button class="menu-button"><i class="icon fas fa-dollar-sign"></i> Cuentas</button>
                 <button class="menu-button"><i class="icon fas fa-box-open"></i> Productos</button>
-                <button class="menu-button"><i class="icon fas fa-paper-plane"></i> Enviar</button>
+                <button class="menu-button" onclick="window.location.href='exportar-pedidos.php'"><i class="icon fas fa-file-export"></i> Exportar</button>
             </div>
 
             <div class="sync-section">
