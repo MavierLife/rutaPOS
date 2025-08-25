@@ -30,6 +30,14 @@ try {
     // Obtener datos JSON
     $input = json_decode(file_get_contents('php://input'), true);
     
+    // Debug: logging de la petición recibida (comentado para evitar interferencia con JSON)
+    // error_log('=== DEBUG PETICIÓN RECIBIDA ===');
+    // error_log('REQUEST_METHOD: ' . $_SERVER['REQUEST_METHOD']);
+    // error_log('Content-Type: ' . ($_SERVER['CONTENT_TYPE'] ?? 'No definido'));
+    // error_log('Raw input: ' . file_get_contents('php://input'));
+    // error_log('Parsed input: ' . json_encode($input));
+    // error_log('JSON decode error: ' . json_last_error_msg());
+    
     if (!$input || !isset($input['action'])) {
         throw new Exception('Acción no especificada');
     }
@@ -64,23 +72,23 @@ function obtenerEstadisticas() {
     global $pdo;
     
     try {
-        error_log('=== OBTENIENDO ESTADÍSTICAS ===');
+        // error_log('=== OBTENIENDO ESTADÍSTICAS ===');
         
         // Contar pedidos finalizados
         $stmt = $pdo->prepare("SELECT COUNT(*) as total FROM tblregistrodepedidos WHERE Ok = '1'");
         $stmt->execute();
         $pedidosFinalizados = $stmt->fetch(PDO::FETCH_ASSOC)['total'];
         
-        error_log('Pedidos finalizados encontrados: ' . $pedidosFinalizados);
+        // error_log('Pedidos finalizados encontrados: ' . $pedidosFinalizados);
         
         // Obtener fecha de última exportación
         $ultimaExportacion = 'Nunca';
         $archivoLog = '../../exports/ultima_exportacion.log';
         if (file_exists($archivoLog)) {
             $ultimaExportacion = date('d/m/Y H:i', filemtime($archivoLog));
-            error_log('Última exportación: ' . $ultimaExportacion);
+            // error_log('Última exportación: ' . $ultimaExportacion);
         } else {
-            error_log('No existe archivo de log de exportación');
+            // error_log('No existe archivo de log de exportación');
         }
         
         $resultado = [
@@ -91,11 +99,11 @@ function obtenerEstadisticas() {
             ]
         ];
         
-        error_log('Estadísticas obtenidas correctamente: ' . json_encode($resultado));
+        // error_log('Estadísticas obtenidas correctamente: ' . json_encode($resultado));
         return $resultado;
         
     } catch (Exception $e) {
-        error_log('Error al obtener estadísticas: ' . $e->getMessage());
+        // error_log('Error al obtener estadísticas: ' . $e->getMessage());
         throw new Exception('Error al obtener estadísticas: ' . $e->getMessage());
     }
 }
@@ -105,9 +113,36 @@ function exportarPedidos() {
     global $pdo;
     
     try {
-        error_log('=== INICIANDO EXPORTACIÓN DE PEDIDOS ===');
+        // error_log('=== INICIANDO EXPORTACIÓN DE PEDIDOS ===');
         
-        // Construir consulta SQL
+        // Obtener terminal de la sesión activa
+        $terminalActiva = $_SESSION['equipo_asignado'] ?? null;
+        
+        // Si no hay terminal asignada en la sesión, consultar tblconfiguraciones
+        if (!$terminalActiva) {
+            // error_log('No hay terminal asignada en la sesión, consultando tblconfiguraciones...');
+            
+            $userId = $_SESSION['user_id'] ?? null;
+            if (!$userId) {
+                throw new Exception('No se ha iniciado sesión correctamente. Falta información del usuario.');
+            }
+            
+            $stmt_config = $pdo->prepare("SELECT EquipoAsigna FROM tblconfiguraciones WHERE UsuarioAsigna = ?");
+            $stmt_config->execute([$userId]);
+            $config = $stmt_config->fetch();
+            
+            if ($config && !empty($config['EquipoAsigna'])) {
+                $terminalActiva = $config['EquipoAsigna'];
+                $_SESSION['equipo_asignado'] = $terminalActiva; // Actualizar sesión para futuras consultas
+                // error_log('Terminal obtenida de tblconfiguraciones: ' . $terminalActiva);
+            } else {
+                throw new Exception('El usuario no tiene un equipo asignado en la configuración. Por favor, contacte al administrador para asignar un equipo.');
+            }
+        }
+        
+        // error_log('Terminal activa: ' . $terminalActiva);
+        
+        // Construir consulta SQL con filtro por terminal
         $sql = "
             SELECT 
                 rp.CodigoSIN,
@@ -150,16 +185,17 @@ function exportarPedidos() {
             FROM tblregistrodepedidos rp
             INNER JOIN tbldetalledepedido dp ON rp.CodigoSIN = dp.CodigoSIN
             INNER JOIN tblcatalogodeclientes c ON rp.CodigoCli = c.CodigoCli
-            WHERE rp.Ok = '1'
+            WHERE rp.Ok = '1' AND LEFT(rp.CodigoSIN, 5) = :terminal
             ORDER BY rp.CodigoSIN, dp.CodigoProd
         ";
         
-        error_log('Ejecutando consulta SQL...');
+        // error_log('Ejecutando consulta SQL con filtro de terminal...');
         $stmt = $pdo->prepare($sql);
+        $stmt->bindParam(':terminal', $terminalActiva, PDO::PARAM_STR);
         $stmt->execute();
         $pedidos = $stmt->fetchAll(PDO::FETCH_ASSOC);
         
-        error_log('Pedidos encontrados: ' . count($pedidos));
+        // error_log('Pedidos encontrados: ' . count($pedidos));
         
         if (empty($pedidos)) {
             error_log('No se encontraron pedidos finalizados');
@@ -172,9 +208,29 @@ function exportarPedidos() {
         
         error_log('Archivo generado exitosamente: ' . json_encode($archivoGenerado));
         
+        // Eliminar registros exportados de la base de datos
+        error_log('Eliminando registros exportados de la base de datos...');
+        $codigosSINExportados = array_unique(array_column($pedidos, 'CodigoSIN'));
+        $codigosSINExportados = array_values($codigosSINExportados);
+        
+        // Validar que hay códigos SIN para eliminar
+        if (empty($codigosSINExportados)) {
+            error_log('No hay códigos SIN para eliminar');
+            throw new Exception('No se encontraron códigos SIN válidos para eliminar');
+        }
+        
+        // Agregar logging para debug
+        error_log('Códigos SIN a eliminar: ' . implode(', ', $codigosSINExportados));
+        
+        eliminarRegistrosExportados($pdo, $codigosSINExportados, $terminalActiva);
+        
+        error_log('Registros eliminados exitosamente. Total CodigoSIN eliminados: ' . count($codigosSINExportados));
+        
         $resultado = [
             'success' => true,
-            'data' => $archivoGenerado
+            'data' => array_merge($archivoGenerado, [
+                'registros_eliminados' => count($codigosSINExportados)
+            ])
         ];
         
         error_log('=== EXPORTACIÓN COMPLETADA ===');
@@ -190,6 +246,8 @@ function exportarPedidos() {
 
 // Función para generar el archivo de exportación
 function generarArchivoExportacion($pedidos) {
+    global $pdo;
+    
     try {
         // Crear directorio de exportaciones si no existe
         $dirExports = '../../exports';
@@ -197,9 +255,29 @@ function generarArchivoExportacion($pedidos) {
             mkdir($dirExports, 0755, true);
         }
         
-        // Generar nombre de archivo único
-        $timestamp = date('YmdHis');
-        $nombreArchivo = "pedidos_export_{$timestamp}.txt";
+        // Obtener terminal para el nombre del archivo
+        $terminal = $_SESSION['equipo_asignado'] ?? null;
+        
+        // Si no hay terminal en la sesión, consultar tblconfiguraciones
+        if (!$terminal) {
+            $userId = $_SESSION['user_id'] ?? null;
+            if ($userId) {
+                $stmt_config = $pdo->prepare("SELECT EquipoAsigna FROM tblconfiguraciones WHERE UsuarioAsigna = ?");
+                $stmt_config->execute([$userId]);
+                $config = $stmt_config->fetch();
+                
+                if ($config && !empty($config['EquipoAsigna'])) {
+                    $terminal = $config['EquipoAsigna'];
+                } else {
+                    throw new Exception('No se pudo determinar el equipo para generar el nombre del archivo.');
+                }
+            } else {
+                throw new Exception('No se pudo determinar el equipo para generar el nombre del archivo.');
+            }
+        }
+        
+        $timestamp = date('ymd_His'); // Formato: YYMMDD_HHMMSS
+        $nombreArchivo = "{$terminal}-POSPedidos-{$timestamp}.txt";
         $rutaArchivo = $dirExports . '/' . $nombreArchivo;
         
         // Abrir archivo para escritura
@@ -343,7 +421,7 @@ function descargarArchivo() {
     }
     
     // Verificar que sea un archivo de exportación válido
-    if (!preg_match('/^pedidos_export_.*\.txt$/', $nombreArchivo)) {
+    if (!preg_match('/^EQP\d+-POSPedidos-\d{6}_\d{6}\.txt$/', $nombreArchivo)) {
         http_response_code(403);
         echo 'Archivo no autorizado';
         return;
@@ -371,6 +449,104 @@ function formatearTamano($bytes) {
     }
     
     return round($bytes, 2) . ' ' . $unidades[$i];
+}
+
+// Función para eliminar registros exportados de la base de datos
+function eliminarRegistrosExportados($pdo, $codigosSIN, $terminal) {
+    try {
+        // error_log('=== INICIANDO ELIMINACIÓN DE REGISTROS EXPORTADOS ===');
+        // error_log('CodigosSIN a eliminar: ' . implode(', ', $codigosSIN));
+        // error_log('Terminal: ' . $terminal);
+        
+        // Verificar que hay códigos para eliminar
+        if (empty($codigosSIN)) {
+            // error_log('No hay códigos SIN para eliminar');
+            return ['registros_principales' => 0, 'registros_detalle' => 0];
+        }
+
+        // Reindexar el array para asegurar índices secuenciales para PDO
+        $codigosSIN = array_values($codigosSIN);
+        
+        // Validar que los CodigosSIN existen antes de eliminar
+        $placeholders = str_repeat('?,', count($codigosSIN) - 1) . '?';
+        $sqlVerificar = "SELECT CodigoSIN FROM tblregistrodepedidos WHERE CodigoSIN IN ($placeholders) AND Ok = '1'";
+        $stmtVerificar = $pdo->prepare($sqlVerificar);
+        $stmtVerificar->execute($codigosSIN);
+        $registrosExistentes = $stmtVerificar->fetchAll(PDO::FETCH_COLUMN);
+        
+        // error_log('Registros existentes a eliminar: ' . implode(', ', $registrosExistentes));
+        
+        if (empty($registrosExistentes)) {
+            // error_log('No se encontraron registros finalizados para eliminar');
+            return ['registros_principales' => 0, 'registros_detalle' => 0];
+        }
+        
+        // Iniciar transacción
+        $pdo->beginTransaction();
+        // error_log('Transacción iniciada');
+        
+        // Primero eliminar de tbldetalledepedido (tabla hija)
+        $sqlDetalle = "DELETE FROM tbldetalledepedido WHERE CodigoSIN IN ($placeholders)";
+        // error_log('Ejecutando SQL detalle: ' . $sqlDetalle);
+        // error_log('Parámetros detalle: ' . implode(', ', $codigosSIN));
+        
+        $stmtDetalle = $pdo->prepare($sqlDetalle);
+        $stmtDetalle->execute($codigosSIN);
+        $registrosDetalleEliminados = $stmtDetalle->rowCount();
+        
+        // error_log('Registros eliminados de tbldetalledepedido: ' . $registrosDetalleEliminados);
+        
+        // Luego eliminar de tblregistrodepedidos (tabla padre)
+        $sqlRegistro = "DELETE FROM tblregistrodepedidos WHERE CodigoSIN IN ($placeholders) AND Ok = '1'";
+        // error_log('Ejecutando SQL registro: ' . $sqlRegistro);
+        // error_log('Parámetros registro: ' . implode(', ', $codigosSIN));
+        
+        $stmtRegistro = $pdo->prepare($sqlRegistro);
+        $stmtRegistro->execute($codigosSIN);
+        $registrosPrincipalesEliminados = $stmtRegistro->rowCount();
+        
+        // error_log('Registros eliminados de tblregistrodepedidos: ' . $registrosPrincipalesEliminados);
+        
+        // Confirmar transacción
+        $pdo->commit();
+        // error_log('Transacción confirmada');
+        
+        // error_log('=== ELIMINACIÓN COMPLETADA EXITOSAMENTE ===');
+        // error_log('Total registros principales eliminados: ' . $registrosPrincipalesEliminados);
+        // error_log('Total registros de detalle eliminados: ' . $registrosDetalleEliminados);
+        
+        return [
+            'registros_principales' => $registrosPrincipalesEliminados,
+            'registros_detalle' => $registrosDetalleEliminados
+        ];
+        
+    } catch (PDOException $e) {
+        // Revertir transacción en caso de error de base de datos
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+            // error_log('Transacción revertida debido a error de PDO');
+        }
+        
+        // error_log('=== ERROR PDO EN ELIMINACIÓN DE REGISTROS ===');
+        // error_log('Error PDO: ' . $e->getMessage());
+        // error_log('Código de error: ' . $e->getCode());
+        // error_log('Trace: ' . $e->getTraceAsString());
+        
+        throw new Exception('Error de base de datos al eliminar registros: ' . $e->getMessage());
+        
+    } catch (Exception $e) {
+        // Revertir transacción en caso de error general
+        if ($pdo->inTransaction()) {
+            $pdo->rollBack();
+            // error_log('Transacción revertida debido a error general');
+        }
+        
+        // error_log('=== ERROR GENERAL EN ELIMINACIÓN DE REGISTROS ===');
+        // error_log('Error: ' . $e->getMessage());
+        // error_log('Trace: ' . $e->getTraceAsString());
+        
+        throw new Exception('Error al eliminar registros exportados: ' . $e->getMessage());
+    }
 }
 
 // Función auxiliar para limpiar datos
