@@ -243,6 +243,21 @@ function listarPedidos($pdo) {
     try {
         error_log("API Pedidos - Iniciando listarPedidos");
         
+        // Obtener el equipo asignado de la sesión
+        $equipoAsignado = $_SESSION['equipo_asignado'] ?? null;
+        error_log("API Pedidos - Equipo asignado en sesión: " . ($equipoAsignado ?? 'NULL'));
+        
+        // Construir la consulta con filtro por terminal si está disponible
+        $whereClause = "";
+        $params = [];
+        
+        if (!empty($equipoAsignado)) {
+            // Filtrar por los primeros 5 dígitos del codigoSIN y por el campo Terminal
+            $whereClause = "WHERE SUBSTRING(p.CodigoSIN, 1, 5) = :equipoAsignado AND p.Terminal = :terminal";
+            $params[':equipoAsignado'] = $equipoAsignado;
+            $params[':terminal'] = $equipoAsignado;
+        }
+        
         // Consulta para obtener pedidos con información del cliente y monto calculado dinámicamente
         $sql = "SELECT 
             p.CodigoSIN,
@@ -271,10 +286,11 @@ function listarPedidos($pdo) {
             FROM tbldetalledepedido 
             GROUP BY CodigoSIN
         ) d ON p.CodigoSIN = d.CodigoSIN
+        $whereClause
         ORDER BY p.FechaIngreso DESC, p.HoraIngreso DESC";
         
         $stmt = $pdo->prepare($sql);
-        $stmt->execute();
+        $stmt->execute($params);
         
         $pedidos = $stmt->fetchAll(PDO::FETCH_ASSOC);
         
