@@ -92,6 +92,6 @@ $dayOfWeek = date('w') + 1; // PHP usa 0=Domingo, necesitamos 1=Domingo
         const userId = <?php echo $_SESSION['user_id']; ?>;
         const currentDay = <?php echo $dayOfWeek; ?>;
     </script>
-    <script src="js/rutas.js"></script>
+    <script src="js/rutas.js?v=<?php echo time(); ?>"></script>
 </body>
 </html>

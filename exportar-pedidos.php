@@ -125,6 +125,6 @@ if (!isset($_SESSION['user_id'])) {
         </div>
     </div>
 
-    <script src="js/exportar.js"></script>
+    <script src="js/exportar.js?v=<?php echo time(); ?>"></script>
 </body>
 </html>

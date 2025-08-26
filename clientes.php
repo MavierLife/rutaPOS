@@ -76,6 +76,6 @@ if (!isset($_SESSION['user_id'])) {
     <script>
         const userId = <?php echo $_SESSION['user_id']; ?>;
     </script>
-    <script src="js/clientes.js"></script>
+    <script src="js/clientes.js?v=<?php echo time(); ?>"></script>
 </body>
 </html>

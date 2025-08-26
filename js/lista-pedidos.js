@@ -91,8 +91,17 @@ function calcularTotales() {
 }
 
 function editarPedido(codigoSIN) {
-    // Redirigir a la página de edición de pedidos
-    window.location.href = `pedidos.php?editar=${codigoSIN}`;
+    const pedido = pedidos.find(p => p.CodigoSIN === codigoSIN);
+    if (pedido && pedido.OK == 1) {
+        Swal.fire({
+            title: 'Pedido Finalizado',
+            text: 'ESTE PEDIDO YA ESTÁ FINALIZADO Y NO SE PUEDE EDITAR',
+            icon: 'warning',
+            confirmButtonText: 'OK'
+        });
+    } else {
+        window.location.href = `pedidos.php?editar=${codigoSIN}`;
+    }
 }
 
 async function eliminarPedido(codigoSIN) {

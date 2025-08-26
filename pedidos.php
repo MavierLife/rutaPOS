@@ -389,9 +389,10 @@ if (isset($_GET['editar']) && !empty($_GET['editar'])) {
     </script>
     
     <!-- Archivos JavaScript separados -->
-    <script src="js/pedidos.js"></script>
-    <script src="js/pedidos-swipe.js"></script>
-    <script src="js/pedidos-finalizacion.js"></script>
+    <script src="js/pedidos.js?v=<?php echo time(); ?>"></script>
+    <script src="js/pedidos-swipe.js?v=<?php echo time(); ?>"></script>
+    <script src="js/pedidos-finalizacion.js?v=<?php echo time(); ?>"></script>
+
     
     <script>
         // Cargar productos al cargar la página

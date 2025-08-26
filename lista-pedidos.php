@@ -88,6 +88,6 @@ date_default_timezone_set('America/El_Salvador');
         </div>
     </main>
     
-    <script src="js/lista-pedidos.js"></script>
+    <script src="js/lista-pedidos.js?v=<?php echo time(); ?>"></script>
 </body>
 </html>
