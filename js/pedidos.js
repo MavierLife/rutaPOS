@@ -375,7 +375,7 @@ function calcularPrecioUnitario(tipo, cantidadUnidades) {
     let precioBase = 0;
     
     if (modoVenta === 'fardos') {
-        // Modo fardos: siempre usar precio mayoreo unitario
+        // NUEVA LÓGICA PARA FARDOS: usar precio completo (mayoreo o especial) SIN DIVIDIR
         switch(tipo) {
             case 'especial':
                 precioBase = productoSeleccionado.precioespecial || 0;
@@ -389,7 +389,8 @@ function calcularPrecioUnitario(tipo, cantidadUnidades) {
             default:
                 precioBase = productoSeleccionado.precioespecial || 0;
         }
-        return precioBase / obtenerUnidadesPorFardo(productoSeleccionado);
+        // Para fardos: retornar precio completo sin dividir
+        return precioBase;
     } else {
         // Modo unidades: aplicar lógica de umbral
         if (cantidadUnidades >= uMinimaMAyoreo) {
@@ -430,7 +431,9 @@ function actualizarPrecioSegunTipo(tipo) {
     
     const precioUnitario = calcularPrecioUnitario(tipo, cantidadEnUnidades);
     
-    document.getElementById('precioActual').textContent = precioUnitario.toFixed(3);
+    // CORREGIDO: Para fardos, mostrar el precio tal como está (ya es precio completo)
+    // Para unidades, mostrar el precio unitario
+    document.getElementById('precioActual').textContent = precioUnitario.toFixed(2);
     calcularTotal();
 }
 
@@ -590,17 +593,23 @@ async function agregarProductoAlPedido() {
         return;
     }
     
-    // Convertir cantidad según el modo de venta
+    // NUEVA LÓGICA PARA FARDOS: cantidad en fardos, precio completo
     let cantidadEnUnidadesEfectivas;
+    let cantidadParaBD;
+    let total;
     
     if (modoVenta === 'fardos') {
-        cantidadEnUnidadesEfectivas = cantidad * obtenerUnidadesPorFardo(productoSeleccionado);
+        // Para fardos: cantidad en BD será la cantidad de fardos (no unidades individuales)
+        cantidadParaBD = cantidad; // Cantidad de fardos
+        cantidadEnUnidadesEfectivas = cantidad * obtenerUnidadesPorFardo(productoSeleccionado); // Para inventario
+        // Total = cantidad de fardos * precio completo del fardo
+        total = cantidad * precioUnitario;
     } else {
+        // Para unidades: lógica anterior
+        cantidadParaBD = cantidad;
         cantidadEnUnidadesEfectivas = cantidad;
+        total = cantidad * precioUnitario;
     }
-    
-    // Calcular total usando las unidades efectivas
-    const total = cantidadEnUnidadesEfectivas * precioUnitario;
     
     // Agregar nuevo producto (ya validamos que no existe en el mismo modo)
     // TV: 'U' para unidades, '' para fardos
@@ -631,7 +640,7 @@ async function agregarProductoAlPedido() {
     await insertarProductoInmediato({
         codigoSIN: pedidoId,
         codigoProd: productoSeleccionado.CodigoProd,
-        cantidad: cantidadEnUnidadesEfectivas, // Cantidad en unidades efectivas
+        cantidad: cantidadParaBD, // Para fardos: cantidad de fardos, para unidades: cantidad de unidades
         precioVenta: precioUnitario,
         bonificacion: 0,
         descuento: 0,
@@ -890,19 +899,27 @@ async function agregarOfertaProducto() {
         return;
     }
     
-    // Convertir cantidad según el modo de venta
+    // NUEVA LÓGICA PARA FARDOS: cantidad en fardos, precio completo
     let cantidadEnUnidadesEfectivas;
+    let cantidadParaBD;
+    let subtotal, descuento, total;
     
     if (modoVenta === 'fardos') {
+        // Para fardos: cantidad en BD será la cantidad de fardos
+        cantidadParaBD = cantidad;
         cantidadEnUnidadesEfectivas = cantidad * obtenerUnidadesPorFardo(productoSeleccionado);
+        // Calcular total con precio completo del fardo
+        subtotal = cantidad * precioUnitario;
+        descuento = subtotal * (descuentoPorcentaje / 100);
+        total = subtotal - descuento;
     } else {
+        // Para unidades: lógica anterior
+        cantidadParaBD = cantidad;
         cantidadEnUnidadesEfectivas = cantidad;
+        subtotal = cantidad * precioUnitario;
+        descuento = subtotal * (descuentoPorcentaje / 100);
+        total = subtotal - descuento;
     }
-    
-    // Calcular total con descuento especial para oferta usando unidades efectivas
-    const subtotal = cantidadEnUnidadesEfectivas * precioUnitario;
-    const descuento = subtotal * (descuentoPorcentaje / 100);
-    const total = subtotal - descuento;
     
     // TV: 'U' para unidades, '' para fardos
     const tvValue = modoVenta === 'unidades' ? 'U' : '';
@@ -934,7 +951,7 @@ async function agregarOfertaProducto() {
     await insertarProductoInmediato({
         codigoSIN: pedidoId,
         codigoProd: productoSeleccionado.CodigoProd,
-        cantidad: cantidadEnUnidadesEfectivas, // Cantidad en unidades efectivas
+        cantidad: cantidadParaBD, // Para fardos: cantidad de fardos, para unidades: cantidad de unidades
         precioVenta: precioUnitario,
         bonificacion: bonificado,
         descuento: descuentoPorcentaje,
@@ -987,8 +1004,8 @@ function actualizarListaProductos() {
             // Modo fardos: producto.cantidad ya está en fardos (lo que ingresó el usuario)
             cantidadMostrar = parseFloat(producto.cantidad.toFixed(2));
             sufijo = ' F';
-            // Precio por fardo completo
-            precioMostrar = producto.precio * obtenerUnidadesPorFardo(producto);
+            // CORREGIDO: Para fardos, el precio ya está completo, no multiplicar
+            precioMostrar = producto.precio;
         } else {
             // Modo unidades: mostrar cantidad en unidades con sufijo 'U'
             cantidadMostrar = producto.cantidad;

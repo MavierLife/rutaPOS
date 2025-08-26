@@ -379,8 +379,8 @@ function agregarProductoInmediato($pdo, $data) {
             }
         }
         
-        // Obtener idimportacion de tblCatalogoDeProductos
-        $productoSql = "SELECT idimportacion, CodigoProd FROM tblcatalogodeproductos WHERE CodigoProd = :codigoProd LIMIT 1";
+        // Obtener información completa del producto incluyendo precios
+        $productoSql = "SELECT idimportacion, CodigoProd, preciomayoreo, precioespecial, unidades FROM tblcatalogodeproductos WHERE CodigoProd = :codigoProd LIMIT 1";
         $productoStmt = $pdo->prepare($productoSql);
         $productoStmt->execute([':codigoProd' => $data['codigoProd']]);
         $producto = $productoStmt->fetch(PDO::FETCH_ASSOC);
@@ -389,6 +389,26 @@ function agregarProductoInmediato($pdo, $data) {
             error_log("API Pedidos - Producto no encontrado: " . $data['codigoProd']);
             echo json_encode(['success' => false, 'message' => 'Producto no encontrado']);
             return;
+        }
+        
+        // Determinar si es fardo y ajustar precio según los nuevos requerimientos
+        $esFardo = (isset($data['tv']) && ($data['tv'] === '' || $data['tv'] === null));
+        $precioVentaFinal = $data['precioVenta'];
+        
+        if ($esFardo) {
+            // Para fardos: usar precio mayoreo o especial completo (sin dividir)
+            // El precio ya viene calculado correctamente desde el frontend
+            // pero verificamos que sea consistente con mayoreo o especial
+            $precioMayoreoCompleto = (float)$producto['preciomayoreo'];
+            $precioEspecialCompleto = (float)$producto['precioespecial'];
+            
+            // Si el precio enviado coincide con mayoreo o especial, lo usamos
+            // De lo contrario, usamos el precio mayoreo por defecto para fardos
+            if (abs($precioVentaFinal - $precioEspecialCompleto) < 0.01) {
+                $precioVentaFinal = $precioEspecialCompleto;
+            } else {
+                $precioVentaFinal = $precioMayoreoCompleto;
+            }
         }
         
         // Verificar si el pedido existe
@@ -428,7 +448,7 @@ function agregarProductoInmediato($pdo, $data) {
             $updateStmt->execute([
                 ':cantidad' => $nuevaCantidad,
                 ':bonificacion' => $data['bonificacion'] ?? 0,
-                ':precioVenta' => $data['precioVenta'],
+                ':precioVenta' => $precioVentaFinal,
                 ':descuento' => $data['descuento'] ?? 0,
                 ':agregarOferta' => $data['agregarOferta'] ?? 'FALSE',
                 ':observaciones' => $data['observaciones'] ?? '',
@@ -456,7 +476,7 @@ function agregarProductoInmediato($pdo, $data) {
                 ':tv' => $data['tv'] ?? '',
                 ':cantidad' => $data['cantidad'],
                 ':bonificacion' => $data['bonificacion'] ?? 0,
-                ':precioVenta' => $data['precioVenta'],
+                ':precioVenta' => $precioVentaFinal,
                 ':descuento' => $data['descuento'] ?? 0,
                 ':agregarOferta' => $data['agregarOferta'] ?? 'FALSE',
                 ':observaciones' => $data['observaciones'] ?? ''
@@ -467,14 +487,24 @@ function agregarProductoInmediato($pdo, $data) {
         
         // Actualizar inventario restando las unidades vendidas
         try {
+            // Calcular cantidad para inventario según si es fardo o unidad
+            $cantidadParaInventario = $data['cantidad'];
+            
+            if ($esFardo) {
+                // Para fardos: cantidad en BD es fardos, pero inventario se actualiza en unidades individuales
+                $unidadesPorFardo = (int)$producto['unidades'];
+                $cantidadParaInventario = $data['cantidad'] * $unidadesPorFardo;
+                error_log("API Pedidos - Fardo detectado: " . $data['cantidad'] . " fardos = " . $cantidadParaInventario . " unidades individuales");
+            }
+            
             $inventarioData = [
                 'codigoProd' => $data['codigoProd'],
-                'cantidad' => $data['cantidad'], // Cantidad ya está en unidades individuales
+                'cantidad' => $cantidadParaInventario, // Cantidad en unidades individuales para inventario
                 'operacion' => 'restar'
             ];
             
             actualizarInventarioInterno($pdo, $inventarioData);
-            error_log("API Pedidos - Inventario actualizado: -" . $data['cantidad'] . " unidades para " . $data['codigoProd']);
+            error_log("API Pedidos - Inventario actualizado: -" . $cantidadParaInventario . " unidades para " . $data['codigoProd']);
             
         } catch (Exception $e) {
             error_log("API Pedidos - Error al actualizar inventario: " . $e->getMessage());
@@ -574,10 +604,10 @@ function obtenerProductosPedido($pdo, $data) {
             $unidadesPorFardo = (int)$producto['unidades'];
             $tv = $producto['TV'];
             
-            // Determinar cantidad para mostrar en UI
+            // CORREGIDO: Para fardos, la cantidad en BD ya está en fardos
             if ($tv === '' || $tv === null) {
-                // Es fardo: convertir unidades individuales a fardos
-                $cantidadDisplay = $unidadesPorFardo > 0 ? $cantidadDB / $unidadesPorFardo : $cantidadDB;
+                // Es fardo: la cantidad en BD ya está en fardos, usar directamente
+                $cantidadDisplay = $cantidadDB;
             } else {
                 // Es unidad: usar cantidad directamente
                 $cantidadDisplay = $cantidadDB;
@@ -590,7 +620,7 @@ function obtenerProductosPedido($pdo, $data) {
                 'descripcion' => $producto['descripcion'],
                 'cantidad' => $cantidadDisplay, // Cantidad convertida para visualización
                 'precio' => (float)$producto['PrecioVenta'],
-                'importe' => (float)$producto['Cantidad'] * (float)$producto['PrecioVenta'],
+                'importe' => $cantidadDisplay * (float)$producto['PrecioVenta'],
                 'bonificacion' => (float)$producto['Bonificacion'],
                 'descuento' => (float)$producto['Descuento'],
                 'oferta' => $producto['AgregarOferta'],
